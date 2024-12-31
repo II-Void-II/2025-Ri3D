@@ -4,17 +4,45 @@
 
 package frc.robot;
 
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
+import org.littletonrobotics.urcl.URCL;
+
+import com.techhounds.houndutil.houndauto.AutoManager;
+import com.techhounds.houndutil.houndlog.LoggingManager;
+import com.techhounds.houndutil.houndlog.interfaces.Log;
+import com.techhounds.houndutil.houndlog.interfaces.SendableLog;
+
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import frc.robot.subsystems.DifferentialDriveMode;
+import frc.robot.subsystems.Drivetrain;
 
 public class RobotContainer {
-  public RobotContainer() {
-    configureBindings();
-  }
+    CommandXboxController controller = new CommandXboxController(0);
 
-  private void configureBindings() {}
+    @Log
+    Drivetrain drivetrain = new Drivetrain();
 
-  public Command getAutonomousCommand() {
-    return Commands.print("No autonomous command configured");
-  }
+    @SendableLog
+    CommandScheduler scheduler = CommandScheduler.getInstance();
+
+    public RobotContainer() {
+        configureBindings();
+        configureAuto();
+        LoggingManager.getInstance().registerRobotContainer(this);
+        URCL.start();
+    }
+
+    private void configureBindings() {
+        drivetrain.setDefaultCommand(drivetrain.teleopDriveCommand(() -> -controller.getLeftY(),
+                () -> -controller.getRightY(), () -> -controller.getRightX(), () -> DifferentialDriveMode.ARCADE));
+
+        controller.x().whileTrue(drivetrain.sysidQuasistaticForwardCommand());
+        controller.y().whileTrue(drivetrain.sysidQuasistaticReverseCommand());
+        controller.a().whileTrue(drivetrain.sysidDynamicForwardCommand());
+        controller.b().whileTrue(drivetrain.sysidDynamicReverseCommand());
+    }
+
+    public void configureAuto() {
+        AutoManager.getInstance().addRoutine(Autos.testPath(drivetrain));
+    }
 }
