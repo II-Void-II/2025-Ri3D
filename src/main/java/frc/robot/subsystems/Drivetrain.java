@@ -14,8 +14,11 @@ import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
 import com.revrobotics.CANSparkMax;
 
+import edu.wpi.first.hal.SimDouble;
+import edu.wpi.first.hal.simulation.SimDeviceDataJNI;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.DifferentialDriveWheelVoltages;
-import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.estimator.DifferentialDrivePoseEstimator;
 import edu.wpi.first.math.filter.SlewRateLimiter;
@@ -32,10 +35,13 @@ import edu.wpi.first.units.Voltage;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.SerialPort;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
+import edu.wpi.first.wpilibj.simulation.SimDeviceSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.Command.InterruptionBehavior;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
@@ -45,6 +51,7 @@ import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
 
 import static frc.robot.Constants.Drivetrain.*;
+import static frc.robot.Constants.LOOP_TIME;
 import static frc.robot.Constants.Controls.*;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
@@ -73,22 +80,31 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     private final SysIdRoutine sysIdRoutine;
 
     @Log
-    private double leftFeedbackVoltage;
+    private DifferentialDriveWheelVoltages feedbackVoltages = new DifferentialDriveWheelVoltages();
     @Log
-    private double rightFeedbackVoltage;
-    @Log
-    private double leftFeedforwardVoltage;
-    @Log
-    private double rightFeedforwardVoltage;
+    private DifferentialDriveWheelVoltages feedforwardVoltages = new DifferentialDriveWheelVoltages();
 
     @Log
-    private final ProfiledPIDController leftPidController = new ProfiledPIDController(kP, kI, kD,
-            XY_CONSTRAINTS);
+    private final PIDController leftVelocityController = new PIDController(kP, kI, kD);
     @Log
-    private final ProfiledPIDController rightPidController = new ProfiledPIDController(kP, kI, kD,
-            XY_CONSTRAINTS);
+    private final PIDController rightVelocityController = new PIDController(kP, kI, kD);
 
     private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(kS, kV_LINEAR, kA_LINEAR);
+
+    private final DifferentialDrivetrainSim drivetrainSim;
+
+    private final SimDouble angleSim = new SimDouble(
+            SimDeviceDataJNI.getSimValueHandle(SimDeviceDataJNI.getSimDeviceHandle("navX-Sensor[0]"), "Yaw"));
+
+    private final SimDeviceSim leftMotorSim;
+    private final SimDouble leftEncoderVelocitySim;
+    private final SimDeviceSim rightMotorSim;
+    private final SimDouble rightEncoderVelocitySim;
+
+    // required for SysId, for whatever reason will not take values from a
+    // SimDeviceSim
+    private double leftEncoderVelocitySimValue = 0.0;
+    private double rightEncoderVelocitySimValue = 0.0;
 
     public Drivetrain() {
         leftPrimaryMotor = SparkConfigurator.createSparkMax(LEFT_PRIMARY_MOTOR_ID, MotorType.kBrushless,
@@ -131,14 +147,35 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                         log -> {
                             log.motor("primary")
                                     .voltage(sysidAppliedVoltageMeasure.mut_replace(
-                                            (RobotBase.isSimulation() ? 1 : 12) * leftPrimaryMotor.getAppliedOutput(),
+                                            (RobotBase.isReal() ? 12 : 1) * leftPrimaryMotor.getAppliedOutput(),
                                             Volts))
                                     .linearPosition(sysidPositionMeasure
                                             .mut_replace(leftPrimaryMotor.getEncoder().getPosition(), Meters))
                                     .linearVelocity(sysidVelocityMeasure
-                                            .mut_replace(leftPrimaryMotor.getEncoder().getVelocity(), MetersPerSecond));
+                                            .mut_replace(
+                                                    RobotBase.isReal() ? leftPrimaryMotor.getEncoder().getVelocity()
+                                                            : leftEncoderVelocitySimValue,
+                                                    MetersPerSecond));
+                            log.motor("right")
+                                    .voltage(sysidAppliedVoltageMeasure.mut_replace(
+                                            (RobotBase.isReal() ? 12 : 1) * rightPrimaryMotor.getAppliedOutput(),
+                                            Volts))
+                                    .linearPosition(sysidPositionMeasure
+                                            .mut_replace(rightPrimaryMotor.getEncoder().getPosition(), Meters))
+                                    .linearVelocity(sysidVelocityMeasure
+                                            .mut_replace(
+                                                    RobotBase.isReal() ? rightPrimaryMotor.getEncoder().getVelocity()
+                                                            : rightEncoderVelocitySimValue,
+                                                    MetersPerSecond));
                         },
                         this));
+
+        leftMotorSim = new SimDeviceSim("SPARK MAX [" + LEFT_PRIMARY_MOTOR_ID + "]");
+        leftEncoderVelocitySim = leftMotorSim.getDouble("Velocity");
+        rightMotorSim = new SimDeviceSim("SPARK MAX [" + RIGHT_PRIMARY_MOTOR_ID + "]");
+        rightEncoderVelocitySim = rightMotorSim.getDouble("Velocity");
+        drivetrainSim = new DifferentialDrivetrainSim(GEARBOX_REPR, GEARING, MOI, MASS_KG, WHEEL_RADIUS,
+                TRACK_WIDTH_METERS, VecBuilder.fill(0, 0, 0.0001, 0.1, 0.1, 0.005, 0.005));
 
         AutoManager.getInstance().setResetOdometryConsumer(this::resetPoseEstimator);
     }
@@ -155,7 +192,19 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void simulationPeriodic() {
+        drivetrainSim.setInputs(
+                leftPrimaryMotor.getAppliedOutput(),
+                rightPrimaryMotor.getAppliedOutput());
+        drivetrainSim.update(LOOP_TIME);
 
+        leftPrimaryMotor.getEncoder().setPosition(drivetrainSim.getLeftPositionMeters());
+        leftEncoderVelocitySim.set(drivetrainSim.getLeftVelocityMetersPerSecond());
+        leftEncoderVelocitySimValue = drivetrainSim.getLeftVelocityMetersPerSecond();
+        rightPrimaryMotor.getEncoder().setPosition(drivetrainSim.getRightPositionMeters());
+        rightEncoderVelocitySim.set(drivetrainSim.getRightVelocityMetersPerSecond());
+        rightEncoderVelocitySimValue = drivetrainSim.getRightVelocityMetersPerSecond();
+
+        angleSim.set(-drivetrainSim.getHeading().getDegrees());
     }
 
     @Override
@@ -267,18 +316,18 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         DifferentialDriveWheelSpeeds currentWheelSpeeds = getWheelSpeeds();
         wheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
 
-        leftFeedbackVoltage = leftPidController.calculate(currentWheelSpeeds.leftMetersPerSecond,
-                wheelSpeeds.leftMetersPerSecond);
-        rightFeedbackVoltage = rightPidController.calculate(currentWheelSpeeds.rightMetersPerSecond,
-                wheelSpeeds.rightMetersPerSecond);
+        feedbackVoltages = new DifferentialDriveWheelVoltages(
+                leftVelocityController.calculate(currentWheelSpeeds.leftMetersPerSecond,
+                        wheelSpeeds.leftMetersPerSecond),
+                rightVelocityController.calculate(currentWheelSpeeds.rightMetersPerSecond,
+                        wheelSpeeds.rightMetersPerSecond));
 
-        leftFeedforwardVoltage = feedforward.calculate(
-                wheelSpeeds.leftMetersPerSecond);
-        rightFeedforwardVoltage = feedforward.calculate(
-                wheelSpeeds.rightMetersPerSecond);
+        feedforwardVoltages = new DifferentialDriveWheelVoltages(
+                feedforward.calculate(wheelSpeeds.leftMetersPerSecond),
+                feedforward.calculate(wheelSpeeds.rightMetersPerSecond));
 
-        leftPrimaryMotor.setVoltage(leftFeedbackVoltage + leftFeedforwardVoltage);
-        rightPrimaryMotor.setVoltage(rightFeedbackVoltage + rightFeedforwardVoltage);
+        leftPrimaryMotor.setVoltage(feedbackVoltages.left + feedforwardVoltages.left);
+        rightPrimaryMotor.setVoltage(feedbackVoltages.right + feedforwardVoltages.right);
     }
 
     @Override
@@ -330,7 +379,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 path,
                 this::getPose, // Robot pose supplier
                 this::getChassisSpeeds, // Current ChassisSpeeds supplier
-                this::drive, // Method that will drive the robot given ChassisSpeeds
+                this::driveClosedLoop, // Method that will drive the robot given ChassisSpeeds
                 new ReplanningConfig(), // Default path replanning config. See the API for the options here
                 () -> {
                     var alliance = DriverStation.getAlliance();
@@ -350,14 +399,16 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public Command setCurrentLimitCommand(int currentLimit) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'setCurrentLimitCommand'");
+        return Commands.runOnce(() -> this.setCurrentLimit(currentLimit)).withName("drivetrain.setCurrentLimit");
     }
 
     @Override
     public Command coastMotorsCommand() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'coastMotorsCommand'");
+        return runEnd(
+                () -> this.setMotorHoldModes(MotorHoldMode.COAST),
+                () -> this.setMotorHoldModes(MotorHoldMode.BRAKE))
+                .withInterruptBehavior(InterruptionBehavior.kCancelIncoming)
+                .withName("drivetrain.coastMotors");
     }
 
     public Command sysidQuasistaticForwardCommand() {

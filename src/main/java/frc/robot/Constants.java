@@ -25,18 +25,20 @@ public class Constants {
         public static final double DRIVE_BASE_RADIUS_METERS = 0.3727; // TODO
 
         public static final double GEARING = 8.45;
-        public static final double WHEEL_CIRCUMFERENCE = Math.PI * Units.inchesToMeters(6); // TODO
+        public static final double WHEEL_RADIUS = Units.inchesToMeters(3); // TODO
+        public static final double WHEEL_CIRCUMFERENCE = 2 * Math.PI * WHEEL_RADIUS;
         public static final double ENCODER_ROTATIONS_TO_METERS = WHEEL_CIRCUMFERENCE / GEARING;
 
         public static final int CURRENT_LIMIT = 60; // TODO
         public static final DCMotor GEARBOX_REPR = DCMotor.getNEO(2);
         public static final double MOI = 0.01;
+        public static final double MASS_KG = 20; // TODO
 
-        public static final double kP = 0.396252;
+        public static final double kP = 1.5;
         public static final double kI = 0.0;
         public static final double kD = 0.0;
         public static final double kS = 0.0519492;
-        public static final double kV_LINEAR = 1.135188;
+        public static final double kV_LINEAR = 2.1969;
         public static final double kA_LINEAR = 0.252588;
         public static final double kV_ANGULAR = 0;
         public static final double kA_ANGULAR = 0;

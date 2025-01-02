@@ -1,11 +1,48 @@
 {
+  "HALProvider": {
+    "Other Devices": {
+      "SPARK MAX [1]": {
+        "header": {
+          "open": true
+        }
+      }
+    }
+  },
   "NTProvider": {
     "types": {
       "/FMSInfo": "FMSInfo",
+      "/HoundLog//scheduler": "Scheduler",
+      "/HoundLog/autonomous/chooser": "String Chooser",
+      "/HoundLog/autonomous/field": "Field2d",
       "/unassigned": "String Chooser"
+    },
+    "windows": {
+      "/HoundLog/autonomous/chooser": {
+        "window": {
+          "visible": true
+        }
+      },
+      "/HoundLog/autonomous/field": {
+        "bottom": 1476,
+        "height": 8.210550308227539,
+        "left": 150,
+        "right": 2961,
+        "top": 79,
+        "trajectory": {
+          "arrows": false,
+          "style": "Track"
+        },
+        "width": 16.541748046875,
+        "window": {
+          "visible": true
+        }
+      }
     }
   },
   "NetworkTables Info": {
     "visible": true
+  },
+  "NetworkTables View": {
+    "visible": false
   }
 }
