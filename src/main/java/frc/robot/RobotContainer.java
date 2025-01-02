@@ -7,13 +7,13 @@ package frc.robot;
 import org.littletonrobotics.urcl.URCL;
 
 import com.techhounds.houndutil.houndauto.AutoManager;
+import com.techhounds.houndutil.houndlib.subsystems.BaseDifferentialDrive.DifferentialDriveMode;
 import com.techhounds.houndutil.houndlog.LoggingManager;
-import com.techhounds.houndutil.houndlog.interfaces.Log;
-import com.techhounds.houndutil.houndlog.interfaces.SendableLog;
+import com.techhounds.houndutil.houndlog.annotations.Log;
+import com.techhounds.houndutil.houndlog.annotations.SendableLog;
 
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import frc.robot.subsystems.DifferentialDriveMode;
 import frc.robot.subsystems.Drivetrain;
 
 public class RobotContainer {
@@ -28,7 +28,7 @@ public class RobotContainer {
     public RobotContainer() {
         configureBindings();
         configureAuto();
-        LoggingManager.getInstance().registerRobotContainer(this);
+        LoggingManager.getInstance().registerObject(this);
         URCL.start();
     }
 

@@ -9,8 +9,9 @@ import com.revrobotics.CANSparkLowLevel.MotorType;
 import com.techhounds.houndutil.houndauto.AutoManager;
 import com.techhounds.houndutil.houndlib.MotorHoldMode;
 import com.techhounds.houndutil.houndlib.SparkConfigurator;
-import com.techhounds.houndutil.houndlog.interfaces.Log;
-import com.techhounds.houndutil.houndlog.interfaces.LoggedObject;
+import com.techhounds.houndutil.houndlib.subsystems.BaseDifferentialDrive;
+import com.techhounds.houndutil.houndlog.annotations.Log;
+import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
 import com.revrobotics.CANSparkMax;
 
 import edu.wpi.first.math.controller.DifferentialDriveWheelVoltages;
@@ -45,13 +46,11 @@ import static edu.wpi.first.units.Units.Volts;
 
 import static frc.robot.Constants.Drivetrain.*;
 import static frc.robot.Constants.Controls.*;
-import static frc.robot.Constants.LOOP_TIME;
-
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 @LoggedObject
-public class Drivetrain extends SubsystemBase {
+public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Log
     private final CANSparkMax leftPrimaryMotor;
     @Log
@@ -144,6 +143,7 @@ public class Drivetrain extends SubsystemBase {
         AutoManager.getInstance().setResetOdometryConsumer(this::resetPoseEstimator);
     }
 
+    @Override
     public void periodic() {
         updatePoseEstimator();
         drawRobotOnField(AutoManager.getInstance().getField());
@@ -153,18 +153,22 @@ public class Drivetrain extends SubsystemBase {
         field.setRobotPose(getPose());
     }
 
+    @Override
     public void simulationPeriodic() {
 
     }
 
+    @Override
     public Pose2d getPose() {
         return poseEstimator.getEstimatedPosition();
     }
 
+    @Override
     public Rotation2d getRotation() {
         return gyro.getRotation2d();
     }
 
+    @Override
     @Log
     public DifferentialDriveWheelPositions getWheelPositions() {
         return new DifferentialDriveWheelPositions(
@@ -172,38 +176,46 @@ public class Drivetrain extends SubsystemBase {
                 rightPrimaryMotor.getEncoder().getPosition());
     }
 
+    @Override
     public DifferentialDriveWheelSpeeds getWheelSpeeds() {
         return new DifferentialDriveWheelSpeeds(
                 leftPrimaryMotor.getEncoder().getVelocity(),
                 rightPrimaryMotor.getEncoder().getVelocity());
     }
 
+    @Override
     public DifferentialDriveWheelVoltages getWheelVoltages() {
         return new DifferentialDriveWheelVoltages(
                 leftPrimaryMotor.getAppliedOutput(),
                 rightPrimaryMotor.getAppliedOutput());
     }
 
+    @Override
     public ChassisSpeeds getChassisSpeeds() {
         return KINEMATICS.toChassisSpeeds(getWheelSpeeds());
     }
 
+    @Override
     public DifferentialDrivePoseEstimator getPoseEstimator() {
         return poseEstimator;
     }
 
+    @Override
     public void updatePoseEstimator() {
         poseEstimator.update(getRotation(), getWheelPositions());
     }
 
+    @Override
     public void resetPoseEstimator(Pose2d pose) {
         poseEstimator.resetPosition(getRotation(), getWheelPositions(), pose);
     }
 
+    @Override
     public void resetGyro() {
         gyro.reset();
     }
 
+    @Override
     public void setMotorHoldModes(MotorHoldMode motorHoldMode) {
         if (motorHoldMode == MotorHoldMode.COAST) {
             leftPrimaryMotor.setIdleMode(IdleMode.kCoast);
@@ -218,6 +230,7 @@ public class Drivetrain extends SubsystemBase {
         }
     }
 
+    @Override
     public void setCurrentLimit(int currentLimit) {
         leftPrimaryMotor.setSmartCurrentLimit(currentLimit);
         leftSecondaryMotor.setSmartCurrentLimit(currentLimit);
@@ -225,6 +238,7 @@ public class Drivetrain extends SubsystemBase {
         rightSecondaryMotor.setSmartCurrentLimit(currentLimit);
     }
 
+    @Override
     public void stop() {
         leftPrimaryMotor.stopMotor();
         leftSecondaryMotor.stopMotor();
@@ -237,6 +251,7 @@ public class Drivetrain extends SubsystemBase {
         rightPrimaryMotor.setVoltage(volts);
     }
 
+    @Override
     public void drive(ChassisSpeeds speeds) {
         DifferentialDriveWheelSpeeds wheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
         wheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
@@ -246,6 +261,7 @@ public class Drivetrain extends SubsystemBase {
                 .setVoltage((wheelSpeeds.rightMetersPerSecond / MAX_DRIVING_VELOCITY_METERS_PER_SECOND) * 12.0);
     }
 
+    @Override
     public void driveClosedLoop(ChassisSpeeds speeds) {
         DifferentialDriveWheelSpeeds wheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
         DifferentialDriveWheelSpeeds currentWheelSpeeds = getWheelSpeeds();
@@ -265,6 +281,7 @@ public class Drivetrain extends SubsystemBase {
         rightPrimaryMotor.setVoltage(rightFeedbackVoltage + rightFeedforwardVoltage);
     }
 
+    @Override
     public Command teleopDriveCommand(DoubleSupplier leftStickThrustSupplier, DoubleSupplier rightStickThrustSupplier,
             DoubleSupplier rightStickRotationSupplier,
             Supplier<DifferentialDriveMode> driveModeSupplier) {
@@ -307,6 +324,7 @@ public class Drivetrain extends SubsystemBase {
 
     }
 
+    @Override
     public Command followPathCommand(PathPlannerPath path) {
         return new FollowPathRamsete(
                 path,
@@ -325,15 +343,18 @@ public class Drivetrain extends SubsystemBase {
         );
     }
 
+    @Override
     public Command resetGyroCommand() {
         return Commands.runOnce(() -> this.resetGyro()).withName("drivetrain.resetGyro");
     }
 
+    @Override
     public Command setCurrentLimitCommand(int currentLimit) {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'setCurrentLimitCommand'");
     }
 
+    @Override
     public Command coastMotorsCommand() {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'coastMotorsCommand'");
