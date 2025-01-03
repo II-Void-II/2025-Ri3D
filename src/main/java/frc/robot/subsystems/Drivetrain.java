@@ -19,6 +19,7 @@ import edu.wpi.first.hal.simulation.SimDeviceDataJNI;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.DifferentialDriveWheelVoltages;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.estimator.DifferentialDrivePoseEstimator;
 import edu.wpi.first.math.filter.SlewRateLimiter;
@@ -85,9 +86,15 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     private DifferentialDriveWheelVoltages feedforwardVoltages = new DifferentialDriveWheelVoltages();
 
     @Log
-    private final PIDController leftVelocityController = new PIDController(kP, kI, kD);
+    private final PIDController leftVelocityController = new PIDController(VELOCITY_kP, VELOCITY_kI, VELOCITY_kD);
     @Log
-    private final PIDController rightVelocityController = new PIDController(kP, kI, kD);
+    private final PIDController rightVelocityController = new PIDController(VELOCITY_kP, VELOCITY_kI, VELOCITY_kD);
+    @Log
+    private final ProfiledPIDController distanceController = new ProfiledPIDController(
+            POSITION_kP, POSITION_kI, POSITION_kD, MOVEMENT_CONSTRAINTS);
+    @Log
+    private final ProfiledPIDController rotationController = new ProfiledPIDController(
+            ROTATION_kP, ROTATION_kI, ROTATION_kD, ROTATION_CONSTRAINTS);
 
     private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(kS, kV_LINEAR, kA_LINEAR);
 
@@ -137,7 +144,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
 
         poseEstimator = new DifferentialDrivePoseEstimator(
-                KINEMATICS, getRotation(), getWheelPositions().leftMeters, getWheelPositions().rightMeters,
+                KINEMATICS, gyro.getRotation2d(), getWheelPositions().leftMeters, getWheelPositions().rightMeters,
                 new Pose2d());
 
         sysIdRoutine = new SysIdRoutine(
@@ -174,10 +181,14 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         leftEncoderVelocitySim = leftMotorSim.getDouble("Velocity");
         rightMotorSim = new SimDeviceSim("SPARK MAX [" + RIGHT_PRIMARY_MOTOR_ID + "]");
         rightEncoderVelocitySim = rightMotorSim.getDouble("Velocity");
-        drivetrainSim = new DifferentialDrivetrainSim(GEARBOX_REPR, GEARING, MOI, MASS_KG, WHEEL_RADIUS,
+        drivetrainSim = new DifferentialDrivetrainSim(GEARBOX_REPR, GEARING, MOI, MASS_KG, WHEEL_RADIUS_METERS,
                 TRACK_WIDTH_METERS, VecBuilder.fill(0, 0, 0.0001, 0.1, 0.1, 0.005, 0.005));
 
         AutoManager.getInstance().setResetOdometryConsumer(this::resetPoseEstimator);
+
+        distanceController.setTolerance(0.05);
+        rotationController.setTolerance(0.02);
+        rotationController.enableContinuousInput(0, 2 * Math.PI);
     }
 
     @Override
@@ -214,7 +225,8 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public Rotation2d getRotation() {
-        return gyro.getRotation2d();
+        // not directly from gyro because pose estimator resets will introduce an offset
+        return poseEstimator.getEstimatedPosition().getRotation();
     }
 
     @Override
@@ -251,7 +263,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void updatePoseEstimator() {
-        poseEstimator.update(getRotation(), getWheelPositions());
+        poseEstimator.update(gyro.getRotation2d(), getWheelPositions());
     }
 
     @Override
@@ -389,7 +401,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                     return false;
                 },
                 this // Reference to this subsystem to set requirements
-        );
+        ).withName("drivetrain.followPath");
     }
 
     @Override
@@ -411,19 +423,55 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 .withName("drivetrain.coastMotors");
     }
 
+    public Command driveDistanceCommand(DoubleSupplier distance) {
+        return runOnce(() -> {
+            distanceController.reset(leftPrimaryMotor.getEncoder().getPosition());
+            distanceController.setGoal(leftPrimaryMotor.getEncoder().getPosition() + distance.getAsDouble());
+            // easiest way to keep chassis straight
+            rotationController.reset(getRotation().getRadians());
+            rotationController.setGoal(getRotation().getRadians());
+        }).andThen(runEnd(() -> {
+            // if gains are in terms of velocity, can just add setpoint velocity to the
+            // calculated velocity to overcome current error
+            double velocity = distanceController.getSetpoint().velocity
+                    + distanceController.calculate(leftPrimaryMotor.getEncoder().getPosition());
+            ChassisSpeeds speeds = new ChassisSpeeds(velocity,
+                    0, rotationController.calculate(getRotation().getRadians()));
+            driveClosedLoop(speeds);
+        }, this::stop))
+                .until(distanceController::atGoal)
+                .withName("drivetrain.driveDistance");
+    }
+
+    public Command rotateToAngle(Supplier<Rotation2d> angle) {
+        return runOnce(() -> {
+            rotationController.reset(getRotation().getRadians());
+            rotationController.setGoal(angle.get().getRadians());
+        }).andThen(runEnd(() -> {
+            // if gains are in terms of velocity, can just add setpoint velocity to the
+            // calculated velocity to overcome current error
+            double rotationalVelocity = rotationController.getSetpoint().velocity
+                    + rotationController.calculate(getRotation().getRadians());
+            ChassisSpeeds speeds = new ChassisSpeeds(0, 0, rotationalVelocity);
+            driveClosedLoop(speeds);
+        }, this::stop))
+                .until(rotationController::atGoal)
+                .withName("drivetrain.rotateToAngle");
+    }
+
     public Command sysidQuasistaticForwardCommand() {
-        return sysIdRoutine.quasistatic(Direction.kForward);
+        return sysIdRoutine.quasistatic(Direction.kForward).withName("drivetrain.sysidQuasistaticForward");
     }
 
     public Command sysidQuasistaticReverseCommand() {
-        return sysIdRoutine.quasistatic(Direction.kReverse);
+        return sysIdRoutine.quasistatic(Direction.kReverse).withName("drivetrain.sysidQuasistaticReverse");
     }
 
     public Command sysidDynamicForwardCommand() {
-        return sysIdRoutine.dynamic(Direction.kForward);
+        return sysIdRoutine.dynamic(Direction.kForward).withName("drivetrain.sysidDynamicForward");
     }
 
     public Command sysidDynamicReverseCommand() {
-        return sysIdRoutine.dynamic(Direction.kReverse);
+        return sysIdRoutine.dynamic(Direction.kReverse).withName("drivetrain.sysidDynamicReverse");
     }
 }

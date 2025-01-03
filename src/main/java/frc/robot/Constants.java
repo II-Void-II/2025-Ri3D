@@ -25,8 +25,8 @@ public class Constants {
         public static final double DRIVE_BASE_RADIUS_METERS = 0.3727; // TODO
 
         public static final double GEARING = 8.45;
-        public static final double WHEEL_RADIUS = Units.inchesToMeters(3); // TODO
-        public static final double WHEEL_CIRCUMFERENCE = 2 * Math.PI * WHEEL_RADIUS;
+        public static final double WHEEL_RADIUS_METERS = Units.inchesToMeters(3); // TODO
+        public static final double WHEEL_CIRCUMFERENCE = 2 * Math.PI * WHEEL_RADIUS_METERS;
         public static final double ENCODER_ROTATIONS_TO_METERS = WHEEL_CIRCUMFERENCE / GEARING;
 
         public static final int CURRENT_LIMIT = 60; // TODO
@@ -34,37 +34,37 @@ public class Constants {
         public static final double MOI = 0.01;
         public static final double MASS_KG = 20; // TODO
 
-        public static final double kP = 1.5;
-        public static final double kI = 0.0;
-        public static final double kD = 0.0;
+        public static final double VELOCITY_kP = 1.5;
+        public static final double VELOCITY_kI = 0.0;
+        public static final double VELOCITY_kD = 0.0;
         public static final double kS = 0.0519492;
         public static final double kV_LINEAR = 2.1969;
         public static final double kA_LINEAR = 0.252588;
         public static final double kV_ANGULAR = 0;
         public static final double kA_ANGULAR = 0;
 
+        public static final double POSITION_kP = 1.5;
+        public static final double POSITION_kI = 0.0;
+        public static final double POSITION_kD = 0.0;
+        public static final double ROTATION_kP = 2.0;
+        public static final double ROTATION_kI = 0.0;
+        public static final double ROTATION_kD = 0.0;
+
         public static final double RAMSETE_B = 2; // TODO
         public static final double RAMSETE_ZETA = 0.7; // TODO
 
-        public static final double MAX_DRIVING_VELOCITY_METERS_PER_SECOND = 5; // TODO
-        public static final double MAX_DRIVING_ACCELERATION_METERS_PER_SECOND_SQUARED = 5; // TODO
-        public static final double MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND = 10;
-        public static final double MAX_ANGULAR_ACCELERATION_RADIANS_PER_SECOND_SQUARED = 30;
+        public static final double MAX_DRIVING_VELOCITY_METERS_PER_SECOND = 5;
+        public static final double MAX_DRIVING_ACCELERATION_METERS_PER_SECOND_SQUARED = 8; // TODO
+        public static final double MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND = 20;
+        public static final double MAX_ANGULAR_ACCELERATION_RADIANS_PER_SECOND_SQUARED = 40;
 
         public static final double PATH_FOLLOWING_TRANSLATION_kP = 8.0; // TODO
         public static final double PATH_FOLLOWING_ROTATION_kP = 8.0; // TODO
 
-        public static final double XY_kP = 1.4; // TODO
-        public static final double XY_kI = 0;
-        public static final double XY_kD = 0.05; // TODO
-        public static final TrapezoidProfile.Constraints XY_CONSTRAINTS = new TrapezoidProfile.Constraints(
+        public static final TrapezoidProfile.Constraints MOVEMENT_CONSTRAINTS = new TrapezoidProfile.Constraints(
                 MAX_DRIVING_VELOCITY_METERS_PER_SECOND,
                 MAX_DRIVING_ACCELERATION_METERS_PER_SECOND_SQUARED);
-
-        public static final double THETA_kP = 1.3; // TODO
-        public static final double THETA_kI = 0;
-        public static final double THETA_kD = 0.05; // TODO
-        public static final TrapezoidProfile.Constraints THETA_CONSTRAINTS = new TrapezoidProfile.Constraints(
+        public static final TrapezoidProfile.Constraints ROTATION_CONSTRAINTS = new TrapezoidProfile.Constraints(
                 MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND,
                 MAX_ANGULAR_ACCELERATION_RADIANS_PER_SECOND_SQUARED);
 
