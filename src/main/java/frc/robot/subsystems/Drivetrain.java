@@ -16,11 +16,12 @@ import com.revrobotics.CANSparkMax;
 
 import edu.wpi.first.hal.SimDouble;
 import edu.wpi.first.hal.simulation.SimDeviceDataJNI;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.controller.DifferentialDriveFeedforward;
 import edu.wpi.first.math.controller.DifferentialDriveWheelVoltages;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.ProfiledPIDController;
-import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.estimator.DifferentialDrivePoseEstimator;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -79,6 +80,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
             .mutable(MetersPerSecond.of(0));
 
     private final SysIdRoutine sysIdRoutine;
+    private final SysIdRoutine sysIdRotationRoutine;
 
     @Log
     private DifferentialDriveWheelVoltages feedbackVoltages = new DifferentialDriveWheelVoltages();
@@ -96,7 +98,12 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     private final ProfiledPIDController rotationController = new ProfiledPIDController(
             ROTATION_kP, ROTATION_kI, ROTATION_kD, ROTATION_CONSTRAINTS);
 
-    private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(kS, kV_LINEAR, kA_LINEAR);
+    private final DifferentialDriveFeedforward feedforward = new DifferentialDriveFeedforward(kV_LINEAR, kA_LINEAR,
+            kV_ANGULAR, kA_ANGULAR, TRACK_WIDTH_METERS);
+
+    private DifferentialDriveWheelSpeeds lastWheelSpeeds = new DifferentialDriveWheelSpeeds();
+    @Log
+    private DifferentialDriveWheelSpeeds commandedWheelSpeeds = new DifferentialDriveWheelSpeeds();
 
     private final DifferentialDrivetrainSim drivetrainSim;
 
@@ -153,6 +160,39 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                         (Measure<Voltage> volts) -> setVoltage(volts.magnitude()),
                         log -> {
                             log.motor("primary")
+                                    .voltage(sysidAppliedVoltageMeasure.mut_replace(
+                                            (RobotBase.isReal() ? 12 : 1) * leftPrimaryMotor.getAppliedOutput(),
+                                            Volts))
+                                    .linearPosition(sysidPositionMeasure
+                                            .mut_replace(leftPrimaryMotor.getEncoder().getPosition(), Meters))
+                                    .linearVelocity(sysidVelocityMeasure
+                                            .mut_replace(
+                                                    RobotBase.isReal() ? leftPrimaryMotor.getEncoder().getVelocity()
+                                                            : leftEncoderVelocitySimValue,
+                                                    MetersPerSecond));
+                            log.motor("right")
+                                    .voltage(sysidAppliedVoltageMeasure.mut_replace(
+                                            (RobotBase.isReal() ? 12 : 1) * rightPrimaryMotor.getAppliedOutput(),
+                                            Volts))
+                                    .linearPosition(sysidPositionMeasure
+                                            .mut_replace(rightPrimaryMotor.getEncoder().getPosition(), Meters))
+                                    .linearVelocity(sysidVelocityMeasure
+                                            .mut_replace(
+                                                    RobotBase.isReal() ? rightPrimaryMotor.getEncoder().getVelocity()
+                                                            : rightEncoderVelocitySimValue,
+                                                    MetersPerSecond));
+                        },
+                        this));
+
+        sysIdRotationRoutine = new SysIdRoutine(
+                new SysIdRoutine.Config(Volts.of(1).per(Seconds.of(1)), Volts.of(8), null, null),
+                new SysIdRoutine.Mechanism(
+                        (Measure<Voltage> volts) -> {
+                            leftPrimaryMotor.setVoltage(volts.magnitude());
+                            rightPrimaryMotor.setVoltage(-volts.magnitude());
+                        },
+                        log -> {
+                            log.motor("left")
                                     .voltage(sysidAppliedVoltageMeasure.mut_replace(
                                             (RobotBase.isReal() ? 12 : 1) * leftPrimaryMotor.getAppliedOutput(),
                                             Volts))
@@ -268,7 +308,8 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void resetPoseEstimator(Pose2d pose) {
-        poseEstimator.resetPosition(getRotation(), getWheelPositions(), pose);
+        System.out.println(pose.toString());
+        poseEstimator.resetPosition(gyro.getRotation2d(), getWheelPositions(), pose);
     }
 
     @Override
@@ -324,22 +365,24 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void driveClosedLoop(ChassisSpeeds speeds) {
-        DifferentialDriveWheelSpeeds wheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
-        DifferentialDriveWheelSpeeds currentWheelSpeeds = getWheelSpeeds();
-        wheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
+        commandedWheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
+        // System.out.println(wheelSpeeds);
+        // System.out.println(currentWheelSpeeds);
+        commandedWheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
 
         feedbackVoltages = new DifferentialDriveWheelVoltages(
-                leftVelocityController.calculate(currentWheelSpeeds.leftMetersPerSecond,
-                        wheelSpeeds.leftMetersPerSecond),
-                rightVelocityController.calculate(currentWheelSpeeds.rightMetersPerSecond,
-                        wheelSpeeds.rightMetersPerSecond));
+                leftVelocityController.calculate(lastWheelSpeeds.leftMetersPerSecond,
+                        commandedWheelSpeeds.leftMetersPerSecond),
+                rightVelocityController.calculate(lastWheelSpeeds.rightMetersPerSecond,
+                        commandedWheelSpeeds.rightMetersPerSecond));
 
-        feedforwardVoltages = new DifferentialDriveWheelVoltages(
-                feedforward.calculate(wheelSpeeds.leftMetersPerSecond),
-                feedforward.calculate(wheelSpeeds.rightMetersPerSecond));
+        feedforwardVoltages = feedforward.calculate(lastWheelSpeeds.leftMetersPerSecond,
+                commandedWheelSpeeds.leftMetersPerSecond, lastWheelSpeeds.rightMetersPerSecond,
+                commandedWheelSpeeds.rightMetersPerSecond, LOOP_TIME);
 
-        leftPrimaryMotor.setVoltage(feedbackVoltages.left + feedforwardVoltages.left);
-        rightPrimaryMotor.setVoltage(feedbackVoltages.right + feedforwardVoltages.right);
+        leftPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.left + feedforwardVoltages.left, -12, 12));
+        rightPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.right + feedforwardVoltages.right, -12, 12));
+        lastWheelSpeeds = commandedWheelSpeeds;
     }
 
     @Override
@@ -392,7 +435,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 this::getPose, // Robot pose supplier
                 this::getChassisSpeeds, // Current ChassisSpeeds supplier
                 this::driveClosedLoop, // Method that will drive the robot given ChassisSpeeds
-                new ReplanningConfig(), // Default path replanning config. See the API for the options here
+                new ReplanningConfig(false, false), // Default path replanning config. See the API for the options here
                 () -> {
                     var alliance = DriverStation.getAlliance();
                     if (alliance.isPresent()) {
@@ -401,7 +444,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                     return false;
                 },
                 this // Reference to this subsystem to set requirements
-        ).withName("drivetrain.followPath");
+        ).andThen(this::stop, this).withName("drivetrain.followPath");
     }
 
     @Override
@@ -473,5 +516,23 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     public Command sysidDynamicReverseCommand() {
         return sysIdRoutine.dynamic(Direction.kReverse).withName("drivetrain.sysidDynamicReverse");
+    }
+
+    public Command sysidQuasistaticRotationForwardCommand() {
+        return sysIdRotationRoutine.quasistatic(Direction.kForward)
+                .withName("drivetrain.sysidQuasistaticRotationForward");
+    }
+
+    public Command sysidQuasistaticRotationReverseCommand() {
+        return sysIdRotationRoutine.quasistatic(Direction.kReverse)
+                .withName("drivetrain.sysidQuasistaticRotationReverse");
+    }
+
+    public Command sysidDynamicRotationForwardCommand() {
+        return sysIdRotationRoutine.dynamic(Direction.kForward).withName("drivetrain.sysidDynamicRotationForward");
+    }
+
+    public Command sysidDynamicRotationReverseCommand() {
+        return sysIdRotationRoutine.dynamic(Direction.kReverse).withName("drivetrain.sysidDynamicRotationReverse");
     }
 }
