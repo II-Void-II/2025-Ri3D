@@ -17,7 +17,6 @@ import com.revrobotics.CANSparkMax;
 import edu.wpi.first.hal.SimDouble;
 import edu.wpi.first.hal.simulation.SimDeviceDataJNI;
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.DifferentialDriveFeedforward;
 import edu.wpi.first.math.controller.DifferentialDriveWheelVoltages;
 import edu.wpi.first.math.controller.PIDController;
@@ -45,8 +44,6 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.Command.InterruptionBehavior;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
-import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
-
 import static edu.wpi.first.units.Units.Meters;
 import static edu.wpi.first.units.Units.MetersPerSecond;
 import static edu.wpi.first.units.Units.Seconds;
@@ -221,8 +218,11 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         leftEncoderVelocitySim = leftMotorSim.getDouble("Velocity");
         rightMotorSim = new SimDeviceSim("SPARK MAX [" + RIGHT_PRIMARY_MOTOR_ID + "]");
         rightEncoderVelocitySim = rightMotorSim.getDouble("Velocity");
+        // drivetrainSim = new DifferentialDrivetrainSim(GEARBOX_REPR, GEARING, MOI,
+        // MASS_KG, WHEEL_RADIUS_METERS,
+        // TRACK_WIDTH_METERS, VecBuilder.fill(0, 0, 0.0001, 0.1, 0.1, 0.005, 0.005));
         drivetrainSim = new DifferentialDrivetrainSim(GEARBOX_REPR, GEARING, MOI, MASS_KG, WHEEL_RADIUS_METERS,
-                TRACK_WIDTH_METERS, VecBuilder.fill(0, 0, 0.0001, 0.1, 0.1, 0.005, 0.005));
+                TRACK_WIDTH_METERS, null);
 
         AutoManager.getInstance().setResetOdometryConsumer(this::resetPoseEstimator);
 
@@ -258,6 +258,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         angleSim.set(-drivetrainSim.getHeading().getDegrees());
     }
 
+    @Log
     @Override
     public Pose2d getPose() {
         return poseEstimator.getEstimatedPosition();
@@ -308,7 +309,6 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void resetPoseEstimator(Pose2d pose) {
-        System.out.println(pose.toString());
         poseEstimator.resetPosition(gyro.getRotation2d(), getWheelPositions(), pose);
     }
 
@@ -366,7 +366,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Override
     public void driveClosedLoop(ChassisSpeeds speeds) {
         commandedWheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
-        // System.out.println(wheelSpeeds);
+        System.out.println(commandedWheelSpeeds);
         // System.out.println(currentWheelSpeeds);
         commandedWheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
 
@@ -377,8 +377,14 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                         commandedWheelSpeeds.rightMetersPerSecond));
 
         feedforwardVoltages = feedforward.calculate(lastWheelSpeeds.leftMetersPerSecond,
-                commandedWheelSpeeds.leftMetersPerSecond, lastWheelSpeeds.rightMetersPerSecond,
+                commandedWheelSpeeds.leftMetersPerSecond,
+                lastWheelSpeeds.rightMetersPerSecond,
                 commandedWheelSpeeds.rightMetersPerSecond, LOOP_TIME);
+        // feedforwardVoltages = new DifferentialDriveWheelVoltages(
+        // simpleFeedforward.calculate(lastWheelSpeeds.leftMetersPerSecond,
+        // commandedWheelSpeeds.leftMetersPerSecond, LOOP_TIME),
+        // simpleFeedforward.calculate(lastWheelSpeeds.rightMetersPerSecond,
+        // commandedWheelSpeeds.rightMetersPerSecond, LOOP_TIME));
 
         leftPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.left + feedforwardVoltages.left, -12, 12));
         rightPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.right + feedforwardVoltages.right, -12, 12));
@@ -435,6 +441,8 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 this::getPose, // Robot pose supplier
                 this::getChassisSpeeds, // Current ChassisSpeeds supplier
                 this::driveClosedLoop, // Method that will drive the robot given ChassisSpeeds
+                RAMSETE_B,
+                RAMSETE_ZETA,
                 new ReplanningConfig(false, false), // Default path replanning config. See the API for the options here
                 () -> {
                     var alliance = DriverStation.getAlliance();
@@ -502,37 +510,20 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 .withName("drivetrain.rotateToAngle");
     }
 
-    public Command sysidQuasistaticForwardCommand() {
-        return sysIdRoutine.quasistatic(Direction.kForward).withName("drivetrain.sysidQuasistaticForward");
+    public Command sysIdQuasistaticCommand(SysIdRoutine.Direction direction) {
+        return sysIdRoutine.quasistatic(direction).withName("drivetrain.sysIdQuasistatic");
     }
 
-    public Command sysidQuasistaticReverseCommand() {
-        return sysIdRoutine.quasistatic(Direction.kReverse).withName("drivetrain.sysidQuasistaticReverse");
+    public Command sysIdDynamicCommand(SysIdRoutine.Direction direction) {
+        return sysIdRoutine.dynamic(direction).withName("drivetrain.sysIdDynamic");
     }
 
-    public Command sysidDynamicForwardCommand() {
-        return sysIdRoutine.dynamic(Direction.kForward).withName("drivetrain.sysidDynamicForward");
+    public Command sysIdQuasistaticRotationCommand(SysIdRoutine.Direction direction) {
+        return sysIdRotationRoutine.quasistatic(direction).withName("drivetrain.sysIdQuasistaticRotation");
     }
 
-    public Command sysidDynamicReverseCommand() {
-        return sysIdRoutine.dynamic(Direction.kReverse).withName("drivetrain.sysidDynamicReverse");
+    public Command sysIdDynamicRotationCommand(SysIdRoutine.Direction direction) {
+        return sysIdRotationRoutine.dynamic(direction).withName("drivetrain.sysIdDynamicRotation");
     }
 
-    public Command sysidQuasistaticRotationForwardCommand() {
-        return sysIdRotationRoutine.quasistatic(Direction.kForward)
-                .withName("drivetrain.sysidQuasistaticRotationForward");
-    }
-
-    public Command sysidQuasistaticRotationReverseCommand() {
-        return sysIdRotationRoutine.quasistatic(Direction.kReverse)
-                .withName("drivetrain.sysidQuasistaticRotationReverse");
-    }
-
-    public Command sysidDynamicRotationForwardCommand() {
-        return sysIdRotationRoutine.dynamic(Direction.kForward).withName("drivetrain.sysidDynamicRotationForward");
-    }
-
-    public Command sysidDynamicRotationReverseCommand() {
-        return sysIdRotationRoutine.dynamic(Direction.kReverse).withName("drivetrain.sysidDynamicRotationReverse");
-    }
 }

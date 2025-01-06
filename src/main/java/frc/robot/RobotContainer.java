@@ -7,56 +7,87 @@ package frc.robot;
 import org.littletonrobotics.urcl.URCL;
 
 import com.techhounds.houndutil.houndauto.AutoManager;
-import com.techhounds.houndutil.houndlib.oi.CommandVirpilJoystick;
-import com.techhounds.houndutil.houndlib.subsystems.BaseDifferentialDrive.DifferentialDriveMode;
+import com.techhounds.houndutil.houndlib.SparkConfigurator;
 import com.techhounds.houndutil.houndlog.LoggingManager;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.SendableLog;
 
-import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Pose3d;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.smartdashboard.Mechanism2d;
+import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
+import edu.wpi.first.wpilibj.smartdashboard.MechanismRoot2d;
+import edu.wpi.first.wpilibj.util.Color;
+import edu.wpi.first.wpilibj.util.Color8Bit;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import frc.robot.subsystems.Arm;
+import frc.robot.subsystems.Climber;
 import frc.robot.subsystems.Drivetrain;
+import frc.robot.subsystems.Elevator;
+import frc.robot.subsystems.Intake;
 
 public class RobotContainer {
-    CommandXboxController controller = new CommandXboxController(0);
-    CommandVirpilJoystick joystick = new CommandVirpilJoystick(0);
+    @SendableLog
+    private Mechanism2d mechanisms = new Mechanism2d(5, 3);
+    private MechanismRoot2d root = mechanisms.getRoot("root", 2.5, 0.25);
+
+    @SuppressWarnings("unused")
+    private MechanismLigament2d fromRobot = root
+            .append(new MechanismLigament2d("fromRobot", Units.inchesToMeters(5.5), 180, 0,
+                    new Color8Bit(Color.kWhite)));
+    @SuppressWarnings("unused")
+    private MechanismLigament2d elevatorBase = root
+            .append(new MechanismLigament2d("elevatorBase", Units.inchesToMeters(36), 90, 2,
+                    new Color8Bit(Color.kWhite)));
+    private MechanismLigament2d elevatorLigament = root
+            .append(new MechanismLigament2d("elevatorStage", Units.inchesToMeters(10), 90,
+                    4,
+                    new Color8Bit(Color.kOrange)));
+    private MechanismLigament2d armLigament = elevatorLigament
+            .append(new MechanismLigament2d("armLigament", Units.inchesToMeters(10), 270,
+                    5,
+                    new Color8Bit(Color.kRed)));
 
     @Log
     Drivetrain drivetrain = new Drivetrain();
+    @Log
+    Elevator elevator = new Elevator(elevatorLigament);
+    @Log
+    Arm arm = new Arm(armLigament, elevator::getCarriageComponentPose);
+    @Log
+    Intake intake = new Intake();
+    @Log
+    Climber climber = new Climber();
 
     @SendableLog
     CommandScheduler scheduler = CommandScheduler.getInstance();
+
+    @Log(groups = "gamePieces")
+    public Pose3d getCoralPose() {
+        Pose3d relativeCoralPose = arm.getClawComponentPose().plus(new Transform3d(0.143, 0, 0, new Rotation3d()));
+        return new Pose3d(drivetrain.getPose())
+                .plus(new Transform3d(relativeCoralPose.getTranslation(), relativeCoralPose.getRotation()))
+                .plus(new Transform3d(0, 0, 0, new Rotation3d(0, Math.PI / 2.0, 0)));
+    }
 
     public RobotContainer() {
         configureBindings();
         configureAuto();
         LoggingManager.getInstance().registerObject(this);
+        SparkConfigurator.safeBurnFlash();
         URCL.start();
     }
 
     private void configureBindings() {
-        // xbox
-        // drivetrain.setDefaultCommand(drivetrain.teleopDriveCommand(() ->
-        // -controller.getLeftY(),
-        // () -> -controller.getRightY(), () -> -controller.getRightX(), () ->
-        // DifferentialDriveMode.ARCADE));
-
-        // virpil
-        drivetrain.setDefaultCommand(drivetrain.teleopDriveCommand(
-                () -> joystick.getY(),
-                // https://www.chiefdelphi.com/t/single-joystick-tank-drive/109331/7
-                () -> joystick.getX() * (joystick.getY() > 0 ? 1 : -1),
-                () -> -controller.getRightX(),
-                () -> DifferentialDriveMode.ARCADE));
-
-        controller.x().whileTrue(drivetrain.driveDistanceCommand(() -> 5));
-        controller.y().whileTrue(drivetrain.rotateToAngle(() -> new Rotation2d(Math.PI)));
-        controller.a().whileTrue(drivetrain.sysidDynamicForwardCommand());
-        controller.b().whileTrue(drivetrain.sysidDynamicReverseCommand());
+        Controls.configureControls(0, drivetrain, elevator, arm, intake, climber);
+        // Controls.configureTestingControls(0, drivetrain, elevator, arm, intake,
+        // climber);
     }
 
     public void configureAuto() {
         AutoManager.getInstance().addRoutine(Autos.testPath(drivetrain));
+        AutoManager.getInstance().addRoutine(Autos.GDC(drivetrain));
     }
 }
