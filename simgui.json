@@ -14,28 +14,36 @@
   "NTProvider": {
     "types": {
       "/FMSInfo": "FMSInfo",
+      "/HoundLog//mechanisms": "Mechanism2d",
       "/HoundLog//scheduler": "Scheduler",
       "/HoundLog/autonomous/chooser": "String Chooser",
       "/HoundLog/autonomous/field": "Field2d",
       "/unassigned": "String Chooser"
     },
     "windows": {
+      "/HoundLog//mechanisms": {
+        "window": {
+          "visible": true
+        }
+      },
       "/HoundLog/autonomous/chooser": {
         "window": {
           "visible": true
         }
       },
       "/HoundLog/autonomous/field": {
-        "bottom": 1476,
-        "height": 8.210550308227539,
-        "left": 150,
-        "right": 2961,
-        "top": 79,
+        "bottom": 603,
+        "builtin": "",
+        "height": 8.051901817321777,
+        "image": "/Users/davidracovan/Downloads/2025-field.png",
+        "left": 176,
+        "right": 1401,
+        "top": 40,
         "trajectory": {
           "arrows": false,
-          "style": "Track"
+          "style": "Line"
         },
-        "width": 16.541748046875,
+        "width": 17.54825210571289,
         "window": {
           "visible": true
         }
@@ -48,8 +56,27 @@
     },
     "transitory": {
       "HoundLog": {
+        "arm": {
+          "control": {
+            "open": true,
+            "pidController": {
+              "open": true,
+              "tunables": {
+                "open": true
+              }
+            }
+          }
+        },
         "drivetrain": {
-          "open": true
+          "Pose2d##v_/HoundLog/drivetrain/pose": {
+            "Translation2d##v_translation": {
+              "open": true
+            }
+          },
+          "open": true,
+          "rightPrimaryMotor": {
+            "open": true
+          }
         },
         "open": true
       }
