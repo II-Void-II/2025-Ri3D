@@ -2,7 +2,7 @@ package frc.robot.subsystems;
 
 import com.revrobotics.CANSparkBase.IdleMode;
 import com.revrobotics.CANSparkLowLevel.MotorType;
-import com.revrobotics.CANSparkMax;
+import com.revrobotics.CANSparkFlex;
 import com.techhounds.houndutil.houndlib.SparkConfigurator;
 import com.techhounds.houndutil.houndlib.subsystems.BaseIntake;
 import com.techhounds.houndutil.houndlog.annotations.Log;
@@ -16,12 +16,12 @@ import static frc.robot.Constants.Intake.*;
 @LoggedObject
 public class Intake extends SubsystemBase implements BaseIntake {
     @Log
-    private final CANSparkMax motor;
+    private final CANSparkFlex motor;
 
     public Intake() {
-        motor = SparkConfigurator.createSparkMax(MOTOR_ID, MotorType.kBrushless,
+        motor = SparkConfigurator.createSparkFlex(MOTOR_ID, MotorType.kBrushless,
                 MOTOR_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kBrake),
+                (s) -> s.setIdleMode(IdleMode.kCoast),
                 (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT));
     }
 
@@ -32,7 +32,7 @@ public class Intake extends SubsystemBase implements BaseIntake {
     @Override
     public Command runRollersCommand() {
         return Commands.startEnd(
-                () -> setRollerVoltage(12),
+                () -> setRollerVoltage(3),
                 () -> setRollerVoltage(0))
                 .withName("intake.runRollers");
     }

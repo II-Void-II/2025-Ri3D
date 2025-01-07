@@ -7,6 +7,7 @@ import com.pathplanner.lib.util.ReplanningConfig;
 import com.revrobotics.CANSparkBase.IdleMode;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 import com.techhounds.houndutil.houndauto.AutoManager;
+import com.techhounds.houndutil.houndlib.CurvatureDriveHelper;
 import com.techhounds.houndutil.houndlib.MotorHoldMode;
 import com.techhounds.houndutil.houndlib.SparkConfigurator;
 import com.techhounds.houndutil.houndlib.subsystems.BaseDifferentialDrive;
@@ -52,6 +53,8 @@ import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.Constants.Drivetrain.*;
 import static frc.robot.Constants.LOOP_TIME;
 import static frc.robot.Constants.Controls.*;
+
+import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
@@ -116,6 +119,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     // SimDeviceSim
     private double leftEncoderVelocitySimValue = 0.0;
     private double rightEncoderVelocitySimValue = 0.0;
+    private CurvatureDriveHelper curvatureDriveHelper = new CurvatureDriveHelper();
 
     public Drivetrain() {
         leftPrimaryMotor = SparkConfigurator.createSparkMax(LEFT_PRIMARY_MOTOR_ID, MotorType.kBrushless,
@@ -342,10 +346,10 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public void stop() {
-        leftPrimaryMotor.stopMotor();
-        leftSecondaryMotor.stopMotor();
-        rightPrimaryMotor.stopMotor();
-        rightSecondaryMotor.stopMotor();
+        leftPrimaryMotor.setVoltage(0);
+        leftSecondaryMotor.setVoltage(0);
+        rightPrimaryMotor.setVoltage(0);
+        rightSecondaryMotor.setVoltage(0);
     }
 
     private void setVoltage(double volts) {
@@ -366,7 +370,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Override
     public void driveClosedLoop(ChassisSpeeds speeds) {
         commandedWheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
-        System.out.println(commandedWheelSpeeds);
+        // System.out.println(commandedWheelSpeeds);
         // System.out.println(currentWheelSpeeds);
         commandedWheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
 
@@ -391,9 +395,8 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         lastWheelSpeeds = commandedWheelSpeeds;
     }
 
-    @Override
     public Command teleopDriveCommand(DoubleSupplier leftStickThrustSupplier, DoubleSupplier rightStickThrustSupplier,
-            DoubleSupplier rightStickRotationSupplier,
+            DoubleSupplier rightStickRotationSupplier, BooleanSupplier quickTurnSupplier,
             Supplier<DifferentialDriveMode> driveModeSupplier) {
         SlewRateLimiter leftThrustLimiter = new SlewRateLimiter(JOYSTICK_INPUT_RATE_LIMIT);
         SlewRateLimiter rightThrustLimiter = new SlewRateLimiter(JOYSTICK_INPUT_RATE_LIMIT);
@@ -403,6 +406,7 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
             double leftThrust = leftStickThrustSupplier.getAsDouble();
             double rightThrust = rightStickThrustSupplier.getAsDouble();
             double rightRotation = rightStickRotationSupplier.getAsDouble();
+            rightRotation *= JOYSTICK_ROT_LIMIT;
             DifferentialDriveMode driveMode = driveModeSupplier.get();
 
             leftThrust = Math.copySign(Math.pow(leftThrust, JOYSTICK_CURVE_EXP), leftThrust);
@@ -413,15 +417,19 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
             rightThrust = rightThrustLimiter.calculate(rightThrust);
             rightRotation = rotationLimiter.calculate(rightRotation);
 
-            leftThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
-            rightThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
-            rightRotation *= MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND;
-
             switch (driveMode) {
                 case ARCADE -> {
+                    leftThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
+                    rightThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
+                    rightRotation *= MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND;
+
                     drive(new ChassisSpeeds(leftThrust, 0, rightRotation));
                 }
                 case TANK -> {
+                    leftThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
+                    rightThrust *= MAX_DRIVING_VELOCITY_METERS_PER_SECOND;
+                    rightRotation *= MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND;
+
                     // the speeds are initially values from -1.0 to 1.0, so we multiply by the max
                     // physical velocity to output in m/s.
                     ChassisSpeeds speeds = KINEMATICS.toChassisSpeeds(new DifferentialDriveWheelSpeeds(
@@ -429,9 +437,25 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
                     drive(speeds);
                 }
+                case CURVATURE -> {
+                    boolean quickTurn = quickTurnSupplier.getAsBoolean();
+                    DifferentialDriveWheelSpeeds wheelSpeeds = curvatureDriveHelper.cheesyDrive(leftThrust,
+                            -rightRotation, quickTurn, MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
+
+                    ChassisSpeeds speeds = KINEMATICS.toChassisSpeeds(wheelSpeeds);
+
+                    drive(speeds);
+                }
             }
         }).withName("drivetrain.teleopDrive");
+    }
 
+    @Override
+    public Command teleopDriveCommand(DoubleSupplier leftStickThrustSupplier, DoubleSupplier rightStickThrustSupplier,
+            DoubleSupplier rightStickRotationSupplier,
+            Supplier<DifferentialDriveMode> driveModeSupplier) {
+        return teleopDriveCommand(leftStickThrustSupplier, rightStickThrustSupplier, rightStickRotationSupplier, null,
+                driveModeSupplier);
     }
 
     @Override
@@ -508,6 +532,10 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
         }, this::stop))
                 .until(rotationController::atGoal)
                 .withName("drivetrain.rotateToAngle");
+    }
+
+    public Command moveVoltageTimeCommand(double voltage, double time) {
+        return run(() -> setVoltage(voltage)).andThen(this::stop).withTimeout(time);
     }
 
     public Command sysIdQuasistaticCommand(SysIdRoutine.Direction direction) {

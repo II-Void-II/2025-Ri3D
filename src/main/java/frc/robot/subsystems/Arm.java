@@ -31,10 +31,14 @@ import edu.wpi.first.wpilibj2.command.Command.InterruptionBehavior;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+import frc.robot.Constants;
+import frc.robot.PositionTracker;
 import frc.robot.Constants.Arm.ArmPosition;
+import frc.robot.GlobalStates;
 
 import static edu.wpi.first.units.Units.Radians;
 import static edu.wpi.first.units.Units.RadiansPerSecond;
+import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.Constants.Arm.*;
 
@@ -63,7 +67,7 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
             MIN_ANGLE_RADIANS,
             MAX_ANGLE_RADIANS,
             true,
-            0);
+            ArmPosition.TOP.value);
 
     @Log(groups = "control")
     private double feedbackVoltage = 0;
@@ -79,10 +83,14 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
 
     private final SysIdRoutine sysIdRoutine;
 
+    private final PositionTracker positionTracker;
     private final MechanismLigament2d ligament;
     private final Supplier<Pose3d> carriagePoseSupplier;
 
-    public Arm(MechanismLigament2d ligament, Supplier<Pose3d> carriagePoseSupplier) {
+    @Log
+    private boolean initialized;
+
+    public Arm(PositionTracker positionTracker, MechanismLigament2d ligament, Supplier<Pose3d> carriagePoseSupplier) {
         motor = SparkConfigurator.createSparkMax(MOTOR_ID, MotorType.kBrushless, MOTOR_INVERTED,
                 (s) -> s.setIdleMode(IdleMode.kBrake),
                 (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
@@ -90,7 +98,7 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
                 (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
 
         sysIdRoutine = new SysIdRoutine(
-                new SysIdRoutine.Config(),
+                new SysIdRoutine.Config(Volts.of(1).per(Seconds.of(1)), Volts.of(3), null, null),
                 new SysIdRoutine.Mechanism(
                         (Measure<Voltage> volts) -> setVoltage(volts.magnitude()),
                         log -> {
@@ -101,13 +109,11 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
                         },
                         this));
 
+        this.positionTracker = positionTracker;
         this.ligament = ligament;
         this.carriagePoseSupplier = carriagePoseSupplier;
 
-        // TODO: houndbrian
-        resetPosition();
-        pidController.reset(0);
-        pidController.setGoal(0);
+        positionTracker.setArmAngleSupplier(this::getPosition);
 
         setDefaultCommand(moveToCurrentGoalCommand());
     }
@@ -119,6 +125,10 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
         motor.getEncoder().setPosition(armSim.getAngleRads());
         simVelocity = armSim.getVelocityRadPerSec();
         ligament.setAngle(Units.radiansToDegrees(getPosition()) + 270);
+    }
+
+    public boolean getInitialized() {
+        return initialized;
     }
 
     // return new Pose3d(0.168, 0, 0.247, new Rotation3d());
@@ -152,13 +162,25 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
 
     @Override
     public void resetPosition() {
-        motor.getEncoder().setPosition(ArmPosition.BOTTOM.value);
+        motor.getEncoder().setPosition(ArmPosition.TOP.value);
+        initialized = true;
     }
 
     @Override
     public void setVoltage(double voltage) {
         voltage = MathUtil.clamp(voltage, -12, 12);
         voltage = Utils.applySoftStops(voltage, getPosition(), MIN_ANGLE_RADIANS, MAX_ANGLE_RADIANS);
+
+        if (voltage < 0
+                && getPosition() < 0
+                && positionTracker.getElevatorPosition() < Constants.Elevator.MOTION_LIMIT) {
+            voltage = 0;
+        }
+
+        if (!GlobalStates.INITIALIZED.enabled()) {
+            voltage = 0.0;
+        }
+
         motor.setVoltage(voltage);
     }
 

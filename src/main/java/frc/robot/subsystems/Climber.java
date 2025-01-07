@@ -4,7 +4,6 @@ import com.revrobotics.CANSparkBase.IdleMode;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 import com.revrobotics.CANSparkMax;
 import com.techhounds.houndutil.houndlib.SparkConfigurator;
-import com.techhounds.houndutil.houndlib.Utils;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
 
@@ -18,6 +17,8 @@ import static frc.robot.Constants.Climber.*;
 public class Climber extends SubsystemBase {
     @Log
     private final CANSparkMax motor;
+    @Log
+    private boolean initialized;
 
     public Climber() {
         motor = SparkConfigurator.createSparkMax(MOTOR_ID, MotorType.kBrushless, MOTOR_INVERTED,
@@ -25,6 +26,11 @@ public class Climber extends SubsystemBase {
                 (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
                 (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
                 (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
+        motor.getEncoder().setPosition(0);
+    }
+
+    public boolean getInitialized() {
+        return initialized;
     }
 
     public double getPosition() {
@@ -32,8 +38,9 @@ public class Climber extends SubsystemBase {
     }
 
     public void setVoltage(double voltage) {
-        voltage = MathUtil.clamp(voltage, -12, 12);
-        Utils.applySoftStops(voltage, getPosition(), MIN_POSITION_METERS, MAX_POSITION_METERS);
+        voltage = MathUtil.clamp(voltage, -4, 4);
+        // Utils.applySoftStops(voltage, getPosition(), MIN_POSITION_METERS,
+        // MAX_POSITION_METERS);
         motor.setVoltage(voltage);
     }
 
@@ -49,5 +56,14 @@ public class Climber extends SubsystemBase {
                 () -> setVoltage(12),
                 () -> setVoltage(0))
                 .withName("climber.winchDown");
+    }
+
+    public void resetPosition() {
+        motor.getEncoder().setPosition(0);
+        initialized = true;
+    }
+
+    public Command resetPositionCommand() {
+        return runOnce(this::resetPosition).withName("arm.resetPosition");
     }
 }

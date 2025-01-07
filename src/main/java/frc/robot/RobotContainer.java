@@ -4,6 +4,8 @@
 
 package frc.robot;
 
+import java.util.function.Supplier;
+
 import org.littletonrobotics.urcl.URCL;
 
 import com.techhounds.houndutil.houndauto.AutoManager;
@@ -16,17 +18,21 @@ import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.Mechanism2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismRoot2d;
 import edu.wpi.first.wpilibj.util.Color;
 import edu.wpi.first.wpilibj.util.Color8Bit;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.subsystems.Arm;
 import frc.robot.subsystems.Climber;
 import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.LEDs;
 
 public class RobotContainer {
     @SendableLog
@@ -50,16 +56,30 @@ public class RobotContainer {
                     5,
                     new Color8Bit(Color.kRed)));
 
+    PositionTracker positionTracker = new PositionTracker();
+
     @Log
     Drivetrain drivetrain = new Drivetrain();
     @Log
-    Elevator elevator = new Elevator(elevatorLigament);
+    Elevator elevator = new Elevator(positionTracker, elevatorLigament);
     @Log
-    Arm arm = new Arm(armLigament, elevator::getCarriageComponentPose);
+    Arm arm = new Arm(positionTracker, armLigament, elevator::getCarriageComponentPose);
     @Log
     Intake intake = new Intake();
     @Log
     Climber climber = new Climber();
+
+    @Log
+    CoralSim coralSim = new CoralSim(drivetrain::getPose, arm::getClawComponentPose);
+
+    @Log
+    LEDs leds = new LEDs();
+
+    @Log
+    HoundBrian houndbrian = new HoundBrian(drivetrain, elevator, arm, climber);
+
+    @Log
+    private final Supplier<Boolean> initialized = GlobalStates.INITIALIZED::enabled;
 
     @SendableLog
     CommandScheduler scheduler = CommandScheduler.getInstance();
@@ -78,16 +98,27 @@ public class RobotContainer {
         LoggingManager.getInstance().registerObject(this);
         SparkConfigurator.safeBurnFlash();
         URCL.start();
+
+        new Trigger(() -> {
+            return elevator.getInitialized()
+                    && arm.getInitialized()
+                    && climber.getInitialized();
+        }).onTrue(GlobalStates.INITIALIZED.enableCommand());
+
+        new Trigger(DriverStation::isEnabled)
+                .onTrue(Commands.parallel(
+                        elevator.resetControllersCommand(),
+                        arm.resetControllersCommand()).withName("resetControllers"));
     }
 
     private void configureBindings() {
-        Controls.configureControls(0, drivetrain, elevator, arm, intake, climber);
+        Controls.configureControls(0, drivetrain, elevator, arm, intake, climber, coralSim);
         // Controls.configureTestingControls(0, drivetrain, elevator, arm, intake,
         // climber);
     }
 
     public void configureAuto() {
         AutoManager.getInstance().addRoutine(Autos.testPath(drivetrain));
-        AutoManager.getInstance().addRoutine(Autos.GDC(drivetrain));
+        AutoManager.getInstance().addRoutine(Autos.GDC(drivetrain, elevator, arm, coralSim));
     }
 }
