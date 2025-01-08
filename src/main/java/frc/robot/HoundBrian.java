@@ -10,6 +10,8 @@ import frc.robot.subsystems.Arm;
 import frc.robot.subsystems.Climber;
 import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Elevator;
+import frc.robot.subsystems.LEDs;
+import frc.robot.subsystems.LEDs.LEDState;
 
 @LoggedObject
 public class HoundBrian {
@@ -24,19 +26,11 @@ public class HoundBrian {
     @Log
     private final DigitalInput unusedButton2 = new DigitalInput(4);
     @Log
-    private final DigitalInput unusedButton3 = new DigitalInput(5);
+    private final DigitalInput switch1 = new DigitalInput(5);
     @Log
-    private final DigitalInput unusedButton4 = new DigitalInput(6);
+    private final DigitalInput switch2 = new DigitalInput(6);
 
-    // private final DIOSim drivetrainButtonSim = new DIOSim(drivetrainButton);
-    // private final DIOSim intakeButtonSim = new DIOSim(intakeButton);
-    // private final DIOSim shooterTiltButtonSim = new DIOSim(shooterTiltButton);
-    // private final DIOSim climberButtonSim = new DIOSim(climberButton);
-    // private final DIOSim noteLiftButtonSim = new DIOSim(noteLiftButton);
-    // private final DIOSim actionButtonSim = new DIOSim(actionButton);
-    // private final DIOSim actionButton2Sim = new DIOSim(actionButton2);
-
-    public HoundBrian(Drivetrain drivetrain, Elevator elevator, Arm arm, Climber climber) {
+    public HoundBrian(Drivetrain drivetrain, Elevator elevator, Arm arm, Climber climber, LEDs leds) {
 
         new Trigger(drivetrainButton::get).negate()
                 .and(DriverStation::isDisabled)
@@ -51,34 +45,9 @@ public class HoundBrian {
                 .and(DriverStation::isDisabled)
                 .onTrue(climber.resetPositionCommand().ignoringDisable(true));
 
-        // new Trigger(intakeButton::get).debounce(3, DebounceType.kBoth)
-        // .and(DriverStation::isDisabled)
-        // .toggleOnTrue(intake.coastMotorsCommand());
-        // new Trigger(shooterTiltButton::get).debounce(3, DebounceType.kBoth)
-        // .and(DriverStation::isDisabled)
-        // .toggleOnTrue(shooterTilt.coastMotorsCommand());
-        // new Trigger(climberButton::get).debounce(3, DebounceType.kBoth)
-        // .and(DriverStation::isDisabled)
-        // .toggleOnTrue(climber.coastMotorsCommand());
-        // new Trigger(noteLiftButton::get).debounce(3, DebounceType.kBoth)
-        // .and(DriverStation::isDisabled)
-        // .toggleOnTrue(noteLift.coastMotorsCommand());
-
-        // if (RobotBase.isSimulation()) {
-        // drivetrainButtonSim.setValue(true);
-        // intakeButtonSim.setValue(true);
-        // shooterTiltButtonSim.setValue(true);
-        // climberButtonSim.setValue(true);
-        // noteLiftButtonSim.setValue(true);
-        // actionButtonSim.setValue(true);
-        // actionButton2Sim.setValue(true);
-        // }
+        new Trigger(switch1::get)
+                .whileTrue(leds.requestStateCommand(LEDState.DEMO_RED).ignoringDisable(true));
+        new Trigger(switch2::get)
+                .whileTrue(leds.requestStateCommand(LEDState.DEMO_GOLD).ignoringDisable(true));
     }
-
-    // public Command simTriggerIntakeButton() {
-    // return Commands.startEnd(() -> intakeButtonSim.setValue(false), () ->
-    // intakeButtonSim.setValue(true))
-    // .ignoringDisable(true);
-    // }
-
 }

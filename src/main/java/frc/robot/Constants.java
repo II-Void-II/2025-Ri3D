@@ -84,7 +84,7 @@ public class Constants {
             ALGAE_L2(0.884),
             ALGAE_L3(1.234),
 
-            L1(0.333),
+            L1(0.323),
             L2(0.31),
             L3(0.70),
             L4(1.27),
@@ -175,8 +175,8 @@ public class Constants {
         public static final double kA = 0.206676;// TODO
         public static final double TOLERANCE = 0.02;
 
-        public static final double MAX_VELOCITY_METERS_PER_SECOND = 9; // TODO
-        public static final double MAX_ACCELERATION_METERS_PER_SECOND_SQUARED = 7; // TODO
+        public static final double MAX_VELOCITY_METERS_PER_SECOND = 8; // TODO
+        public static final double MAX_ACCELERATION_METERS_PER_SECOND_SQUARED = 4; // TODO
         public static final TrapezoidProfile.Constraints MOVEMENT_CONSTRAINTS = new TrapezoidProfile.Constraints(
                 MAX_VELOCITY_METERS_PER_SECOND, MAX_ACCELERATION_METERS_PER_SECOND_SQUARED);
     }
@@ -205,7 +205,21 @@ public class Constants {
 
     public static final class LEDs {
         public static enum LEDSection implements BaseLEDSection {
-            ALL(0, 326, true);
+            ELEVATOR_LEFT(5, 59, false),
+            ELEVATOR_TOP(60, 89, true),
+            ELEVATOR_TOP_LEFT(60, 74, false),
+            ELEVATOR_TOP_RIGHT(75, 89, true),
+            ELEVATOR_RIGHT(90, 146, true),
+            MIDDLE(147, 167, false),
+            HOPPER_RIGHT(166, 198, true),
+            HOPPER_RIGHT_FULL(166, 218, true),
+            HOPPER_TOP(199, 238), // center 218
+            HOPPER_LEFT(239, 273),
+            HOPPER_LEFT_FULL(219, 273),
+            HOPPER_ARCH(274, 298),
+            HOPPER_ARCH_LEFT(274, 289),
+            HOPPER_ARCH_RIGHT(290, 305, true),
+            ALL(0, 305, true);
 
             private final int startIdx;
             private final int endIdx;
@@ -245,11 +259,11 @@ public class Constants {
         public static final int PORT = 0;
         public static final int LENGTH = 333;
 
-        public static final List<LEDState> DEFAULT_STATES = List.of(LEDState.GOLD_WAVE);
+        public static final List<LEDState> DEFAULT_STATES = List.of();
     }
 
     public static final class Controls {
-        public static final double JOYSTICK_INPUT_RATE_LIMIT = 3.0;
+        public static final double JOYSTICK_INPUT_RATE_LIMIT = 15.0;
         public static final double JOYSTICK_INPUT_DEADBAND = 0.1;
         public static final double JOYSTICK_CURVE_EXP = 2;
         public static final double JOYSTICK_ROT_CURVE_EXP = 3;

@@ -93,14 +93,10 @@ public class RobotCommands {
                 Map.entry(
                         ScoreLevel.L2,
                         Commands.parallel(
-                                // elevator.movePositionDeltaCommand(() ->
-                                // Constants.Elevator.SCORING_MOVEMENT).asProxy(),
                                 arm.movePositionDeltaCommand(() -> Constants.Arm.SCORING_MOVEMENT).asProxy())),
                 Map.entry(
                         ScoreLevel.L3,
                         Commands.parallel(
-                                // elevator.movePositionDeltaCommand(() ->
-                                // Constants.Elevator.SCORING_MOVEMENT).asProxy(),
                                 arm.movePositionDeltaCommand(() -> Constants.Arm.SCORING_MOVEMENT).asProxy())),
                 Map.entry(
                         ScoreLevel.L4,
@@ -143,9 +139,8 @@ public class RobotCommands {
                 Commands.parallel(
                         elevator.moveToPositionCommand(() -> ElevatorPosition.INTAKE).asProxy(),
                         arm.moveToPositionCommand(() -> ArmPosition.BOTTOM).asProxy()),
-                // elevator.movePositionDeltaCommand(() -> 0.31).asProxy().alongWith(
-                // Commands.waitSeconds(0.1).andThen(coralSim.setLocationCommand(CoralSimLocation.CLAW))),
-                autoPrepareCoralScoreCommand(level, elevator, arm, coralSim));
+                autoPrepareCoralScoreCommand(level, elevator, arm, coralSim).alongWith(
+                        Commands.waitSeconds(0.1).andThen(coralSim.setLocationCommand(CoralSimLocation.CLAW))));
     }
 
     public static Command prepareAlgaeL2RemoveCommand(Elevator elevator, Arm arm) {

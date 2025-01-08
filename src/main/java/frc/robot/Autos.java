@@ -7,7 +7,6 @@ import com.techhounds.houndutil.houndauto.AutoRoutine;
 
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import frc.robot.Constants.Elevator.ElevatorPosition;
 import frc.robot.CoralSim.CoralSimLocation;
 import frc.robot.CoralSim.CoralSimScoreLocation;
 import frc.robot.subsystems.Arm;
@@ -35,32 +34,6 @@ public class Autos {
         PathPlannerPath Pickup_CPath = PathPlannerPath.fromPathFile("Pickup-C");
 
         Command command = Commands.sequence(
-                RobotCommands.prepareCoralScoreCommand(ScoreLevel.L4, elevator, arm, coralSim),
-                drivetrain.followPathCommand(Start_GPath),
-                Commands.parallel(
-                        RobotCommands.scoreCoralCommand(drivetrain, elevator, arm, coralSim),
-                        Commands.waitSeconds(0.1).andThen(simulateCoral(CoralSimScoreLocation.G_L4, coralSim))),
-                drivetrain.followPathCommand(G_PickupPath)
-                        .alongWith(RobotCommands.prepareIntakeCoralCommand(elevator, arm, coralSim)),
-                coralSim.setLocationCommand(CoralSimLocation.INTAKE),
-                Commands.parallel(
-                        RobotCommands.intakeIntoScoreCommand(ScoreLevel.L4, elevator, arm, coralSim),
-                        drivetrain.followPathCommand(Pickup_DPath)),
-
-                Commands.parallel(
-                        RobotCommands.scoreCoralCommand(drivetrain, elevator, arm, coralSim),
-                        Commands.waitSeconds(0.1).andThen(simulateCoral(CoralSimScoreLocation.D_L4, coralSim))),
-                drivetrain.followPathCommand(D_PickupPath)
-                        .alongWith(RobotCommands.prepareIntakeCoralCommand(elevator, arm, coralSim)),
-                coralSim.setLocationCommand(CoralSimLocation.INTAKE),
-                Commands.parallel(
-                        RobotCommands.intakeIntoScoreCommand(ScoreLevel.L4, elevator, arm, coralSim),
-                        drivetrain.followPathCommand(Pickup_CPath)),
-                Commands.parallel(
-                        RobotCommands.scoreCoralCommand(drivetrain, elevator, arm, coralSim),
-                        Commands.waitSeconds(0.1).andThen(simulateCoral(CoralSimScoreLocation.C_L4, coralSim))));
-
-        Command driveCommand = Commands.sequence(
                 RobotCommands.prepareCoralScoreCommand(ScoreLevel.L4, elevator, arm, coralSim)
                         .alongWith(Commands.waitSeconds(0.5).andThen(drivetrain.followPathCommand(Start_GPath))),
                 Commands.parallel(
@@ -90,7 +63,7 @@ public class Autos {
                         Commands.waitSeconds(0.1).andThen(simulateCoral(CoralSimScoreLocation.C_L4,
                                 coralSim))));
 
-        return new AutoRoutine("GDC", driveCommand,
+        return new AutoRoutine("GDC", command,
                 List.of(Start_GPath, G_PickupPath, Pickup_DPath, D_PickupPath, Pickup_CPath),
                 Start_GPath.getStartingDifferentialPose());
     }

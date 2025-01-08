@@ -10,6 +10,8 @@ import frc.robot.subsystems.Climber;
 import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.LEDs;
+import frc.robot.subsystems.LEDs.LEDState;
 
 public class Controls {
     public static void configureControls(int port, Drivetrain drivetrain, Elevator elevator, Arm arm, Intake intake,
@@ -23,7 +25,7 @@ public class Controls {
                         () -> -controller.getRightY(),
                         () -> -controller.getRightX(),
                         () -> controller.getHID().getRightStickButton(),
-                        () -> DifferentialDriveMode.CURVATURE));
+                        () -> DifferentialDriveMode.ARCADE));
 
         controller.a().whileTrue(RobotCommands.prepareCoralScoreCommand(ScoreLevel.L1, elevator, arm, coralSim));
         controller.x().whileTrue(RobotCommands.prepareCoralScoreCommand(ScoreLevel.L2, elevator, arm, coralSim));
@@ -40,8 +42,6 @@ public class Controls {
 
         controller.rightBumper().whileTrue(intake.runRollersCommand());
         controller.leftBumper().whileTrue(intake.reverseRollersCommand());
-        // controller.rightTrigger().whileTrue(climber.winchUpCommand());
-        // controller.leftTrigger().whileTrue(climber.winchDownCommand());
 
         climber.setDefaultCommand(Commands
                 .run(() -> climber.setVoltage(MathUtil
@@ -50,27 +50,6 @@ public class Controls {
                         climber));
 
         controller.povRight().onTrue(GlobalStates.INITIALIZED.enableCommand());
-
-        // controller.x().whileTrue(elevator.moveToPositionCommand(() ->
-        // ElevatorPosition.L4));
-        // controller.y().whileTrue(elevator.moveToPositionCommand(() ->
-        // ElevatorPosition.L3));
-        // controller.a().whileTrue(elevator.moveToPositionCommand(() ->
-        // ElevatorPosition.L2));
-        // controller.b().whileTrue(elevator.moveToPositionCommand(() ->
-        // ElevatorPosition.L1));
-        // controller.povLeft().whileTrue(arm.moveToPositionCommand(() ->
-        // ArmPosition.L4));
-        // controller.povRight().whileTrue(arm.moveToPositionCommand(() ->
-        // ArmPosition.L3));
-        // controller.povDown().whileTrue(arm.moveToPositionCommand(() ->
-        // ArmPosition.BOTTOM));
-        // controller.povUp().whileTrue(arm.moveToPositionCommand(() ->
-        // ArmPosition.TOP));
-        // controller.x().whileTrue(arm.sysIdQuasistaticCommand(Direction.kForward));
-        // controller.y().whileTrue(arm.sysIdQuasistaticCommand(Direction.kReverse));
-        // controller.a().whileTrue(arm.sysIdDynamicCommand(Direction.kForward));
-        // controller.b().whileTrue(arm.sysIdDynamicCommand(Direction.kReverse));
 
         controller.back().toggleOnTrue(
                 Commands.parallel(
@@ -86,12 +65,10 @@ public class Controls {
 
     public static void configureTestingControls(int port, Drivetrain drivetrain, Elevator elevator, Arm arm,
             Intake intake,
-            Climber climber) {
+            Climber climber, LEDs leds) {
 
-        // CommandXboxController controller = new CommandXboxController(port);
-        // elevator.setDefaultCommand(elevator.setOverridenSpeedCommand(() ->
-        // -controller.getLeftY()));
-        // arm.setDefaultCommand(arm.setOverridenSpeedCommand(() ->
-        // -controller.getRightY()));
+        CommandXboxController controller = new CommandXboxController(port);
+        controller.b().toggleOnTrue(leds.requestStateCommand(LEDState.DEMO_RED));
+        controller.y().toggleOnTrue(leds.requestStateCommand(LEDState.DEMO_GOLD));
     }
 }

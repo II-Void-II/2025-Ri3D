@@ -37,13 +37,47 @@ public class LEDs extends SubsystemBase {
 
     private ArrayList<LEDState> currentStates = new ArrayList<LEDState>();
 
+    private static final Color GOLD = new Color("#FF6E05");
+
     /**
      * An enum of all possible LED states.
      */
     public enum LEDState {
         GOLD_WAVE(
-                wave(new Color("#FBBF05"), 25, 10, 50, 255, LEDSection.ALL),
-                wave(new Color("#FBBF05"), 25, 10, 50, 255, LEDSection.ALL));
+                wave(new Color("#FBBF05"), 25, 10, 50, 150, LEDSection.ALL),
+                wave(new Color("#FBBF05"), 25, 10, 50, 150, LEDSection.ALL)),
+        DEMO_RED(
+                fire2012Palette(0.2, 0.3,
+                        List.of(Color.kBlack, Color.kRed),
+                        LEDSection.ELEVATOR_LEFT),
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.ELEVATOR_TOP_LEFT),
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.ELEVATOR_TOP_RIGHT),
+                fire2012Palette(0.2, 0.3,
+                        List.of(Color.kBlack, Color.kRed),
+                        LEDSection.ELEVATOR_RIGHT),
+
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.HOPPER_RIGHT_FULL),
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.HOPPER_LEFT_FULL),
+
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.HOPPER_ARCH_LEFT),
+                wave(Color.kRed, 25, 15, 0, 255, LEDSection.HOPPER_ARCH_RIGHT)),
+        DEMO_GOLD(
+                fire2012Palette(0.2, 0.3,
+                        List.of(Color.kBlack, GOLD),
+                        LEDSection.ELEVATOR_LEFT),
+                wave(GOLD, 25, 15, 0, 255, LEDSection.ELEVATOR_TOP_LEFT),
+                wave(GOLD, 25, 15, 0, 255, LEDSection.ELEVATOR_TOP_RIGHT),
+                fire2012Palette(0.2, 0.3,
+                        List.of(Color.kBlack, GOLD),
+                        LEDSection.ELEVATOR_RIGHT),
+
+                wave(GOLD, 25, 15, 0, 255, LEDSection.HOPPER_RIGHT_FULL),
+                wave(GOLD, 25, 15, 0, 255, LEDSection.HOPPER_LEFT_FULL),
+
+                // solid(Color.kGreen, LEDSection.HOPPER_ARCH_LEFT),
+                // solid(Color.kYellow, LEDSection.HOPPER_ARCH_RIGHT));
+                wave(GOLD, 25, 15, 0, 255, LEDSection.HOPPER_ARCH_LEFT),
+                wave(GOLD, 25, 15, 0, 255, LEDSection.HOPPER_ARCH_RIGHT));
 
         private List<Consumer<AddressableLEDBuffer>> bufferConsumers;
 

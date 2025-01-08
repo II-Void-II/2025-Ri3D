@@ -76,7 +76,7 @@ public class RobotContainer {
     LEDs leds = new LEDs();
 
     @Log
-    HoundBrian houndbrian = new HoundBrian(drivetrain, elevator, arm, climber);
+    HoundBrian houndbrian = new HoundBrian(drivetrain, elevator, arm, climber, leds);
 
     @Log
     private final Supplier<Boolean> initialized = GlobalStates.INITIALIZED::enabled;
@@ -113,8 +113,7 @@ public class RobotContainer {
 
     private void configureBindings() {
         Controls.configureControls(0, drivetrain, elevator, arm, intake, climber, coralSim);
-        // Controls.configureTestingControls(0, drivetrain, elevator, arm, intake,
-        // climber);
+        Controls.configureTestingControls(1, drivetrain, elevator, arm, intake, climber, leds);
     }
 
     public void configureAuto() {
