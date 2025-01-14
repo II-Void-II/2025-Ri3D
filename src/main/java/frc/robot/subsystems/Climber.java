@@ -1,9 +1,11 @@
 package frc.robot.subsystems;
 
-import com.revrobotics.CANSparkBase.IdleMode;
-import com.revrobotics.CANSparkLowLevel.MotorType;
-import com.revrobotics.CANSparkMax;
-import com.techhounds.houndutil.houndlib.SparkConfigurator;
+import com.revrobotics.spark.SparkBase.PersistMode;
+import com.revrobotics.spark.SparkBase.ResetMode;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+import com.revrobotics.spark.config.SparkMaxConfig;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
 
@@ -16,16 +18,26 @@ import static frc.robot.Constants.Climber.*;
 @LoggedObject
 public class Climber extends SubsystemBase {
     @Log
-    private final CANSparkMax motor;
+    private final SparkMax motor;
+
+    private SparkMaxConfig motorConfig;
+
     @Log
     private boolean initialized;
 
     public Climber() {
-        motor = SparkConfigurator.createSparkMax(MOTOR_ID, MotorType.kBrushless, MOTOR_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
+        motorConfig = new SparkMaxConfig();
+        motorConfig
+                .inverted(MOTOR_INVERTED)
+                .idleMode(IdleMode.kBrake)
+                .smartCurrentLimit(CURRENT_LIMIT);
+        motorConfig.encoder
+                .positionConversionFactor(ENCODER_ROTATIONS_TO_METERS)
+                .velocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0);
+
+        motor = new SparkMax(MOTOR_ID, MotorType.kBrushless);
+        motor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+
         motor.getEncoder().setPosition(0);
     }
 
@@ -39,8 +51,6 @@ public class Climber extends SubsystemBase {
 
     public void setVoltage(double voltage) {
         voltage = MathUtil.clamp(voltage, -4, 4);
-        // Utils.applySoftStops(voltage, getPosition(), MIN_POSITION_METERS,
-        // MAX_POSITION_METERS);
         motor.setVoltage(voltage);
     }
 

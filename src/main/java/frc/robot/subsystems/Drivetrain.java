@@ -1,20 +1,23 @@
 package frc.robot.subsystems;
 
-import com.kauailabs.navx.frc.AHRS;
-import com.pathplanner.lib.commands.FollowPathRamsete;
+import com.pathplanner.lib.commands.FollowPathCommand;
+import com.pathplanner.lib.controllers.PPLTVController;
 import com.pathplanner.lib.path.PathPlannerPath;
-import com.pathplanner.lib.util.ReplanningConfig;
-import com.revrobotics.CANSparkBase.IdleMode;
-import com.revrobotics.CANSparkLowLevel.MotorType;
+import com.pathplanner.lib.util.DriveFeedforwards;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.SparkBase.PersistMode;
+import com.revrobotics.spark.SparkBase.ResetMode;
+import com.revrobotics.spark.config.SparkMaxConfig;
+import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+import com.studica.frc.AHRS;
+import com.studica.frc.AHRS.NavXComType;
 import com.techhounds.houndutil.houndauto.AutoManager;
 import com.techhounds.houndutil.houndlib.CurvatureDriveHelper;
 import com.techhounds.houndutil.houndlib.MotorHoldMode;
-import com.techhounds.houndutil.houndlib.SparkConfigurator;
 import com.techhounds.houndutil.houndlib.subsystems.BaseDifferentialDrive;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
-import com.revrobotics.CANSparkMax;
-
 import edu.wpi.first.hal.SimDouble;
 import edu.wpi.first.hal.simulation.SimDeviceDataJNI;
 import edu.wpi.first.math.MathUtil;
@@ -29,14 +32,13 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelPositions;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
-import edu.wpi.first.units.Distance;
-import edu.wpi.first.units.Measure;
-import edu.wpi.first.units.MutableMeasure;
-import edu.wpi.first.units.Velocity;
-import edu.wpi.first.units.Voltage;
+import edu.wpi.first.units.measure.LinearAcceleration;
+import edu.wpi.first.units.measure.MutDistance;
+import edu.wpi.first.units.measure.MutLinearVelocity;
+import edu.wpi.first.units.measure.MutVoltage;
+import edu.wpi.first.units.measure.Voltage;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotBase;
-import edu.wpi.first.wpilibj.SerialPort;
 import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
 import edu.wpi.first.wpilibj.simulation.SimDeviceSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
@@ -61,23 +63,22 @@ import java.util.function.Supplier;
 @LoggedObject
 public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Log
-    private final CANSparkMax leftPrimaryMotor;
+    private final SparkMax leftPrimaryMotor;
     @Log
-    private final CANSparkMax leftSecondaryMotor;
+    private final SparkMax leftSecondaryMotor;
     @Log
-    private final CANSparkMax rightPrimaryMotor;
+    private final SparkMax rightPrimaryMotor;
     @Log
-    private final CANSparkMax rightSecondaryMotor;
+    private final SparkMax rightSecondaryMotor;
 
     @Log
-    private final AHRS gyro = new AHRS(SerialPort.Port.kMXP);
+    private final AHRS gyro = new AHRS(NavXComType.kMXP_SPI);
 
     private final DifferentialDrivePoseEstimator poseEstimator;
 
-    private final MutableMeasure<Voltage> sysidAppliedVoltageMeasure = MutableMeasure.mutable(Volts.of(0));
-    private final MutableMeasure<Distance> sysidPositionMeasure = MutableMeasure.mutable(Meters.of(0));
-    private final MutableMeasure<Velocity<Distance>> sysidVelocityMeasure = MutableMeasure
-            .mutable(MetersPerSecond.of(0));
+    private final MutVoltage sysidAppliedVoltageMeasure = Volts.mutable(0);
+    private final MutDistance sysidPositionMeasure = Meters.mutable(0);
+    private final MutLinearVelocity sysidVelocityMeasure = MetersPerSecond.mutable(0);
 
     private final SysIdRoutine sysIdRoutine;
     private final SysIdRoutine sysIdRotationRoutine;
@@ -115,6 +116,8 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     private final SimDeviceSim rightMotorSim;
     private final SimDouble rightEncoderVelocitySim;
 
+    private SparkMaxConfig motorConfig;
+
     // required for SysId, for whatever reason will not take values from a
     // SimDeviceSim
     private double leftEncoderVelocitySimValue = 0.0;
@@ -122,43 +125,41 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     private CurvatureDriveHelper curvatureDriveHelper = new CurvatureDriveHelper();
 
     public Drivetrain() {
-        leftPrimaryMotor = SparkConfigurator.createSparkMax(LEFT_PRIMARY_MOTOR_ID, MotorType.kBrushless,
-                LEFT_DRIVE_MOTORS_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
-        leftSecondaryMotor = SparkConfigurator.createSparkMax(LEFT_SECONDARY_MOTOR_ID, MotorType.kBrushless,
-                LEFT_DRIVE_MOTORS_INVERTED,
-                (s) -> s.follow(leftPrimaryMotor),
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
 
-        rightPrimaryMotor = SparkConfigurator.createSparkMax(RIGHT_PRIMARY_MOTOR_ID, MotorType.kBrushless,
-                RIGHT_DRIVE_MOTORS_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
+        motorConfig = new SparkMaxConfig();
 
-        rightSecondaryMotor = SparkConfigurator.createSparkMax(RIGHT_SECONDARY_MOTOR_ID, MotorType.kBrushless,
-                RIGHT_DRIVE_MOTORS_INVERTED,
-                (s) -> s.follow(rightPrimaryMotor),
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
+        motorConfig
+                .inverted(LEFT_DRIVE_MOTORS_INVERTED)
+                .idleMode(IdleMode.kBrake)
+                .smartCurrentLimit(CURRENT_LIMIT);
+        motorConfig.encoder
+                .positionConversionFactor(ENCODER_ROTATIONS_TO_METERS)
+                .velocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0);
+
+        leftPrimaryMotor = new SparkMax(LEFT_PRIMARY_MOTOR_ID, MotorType.kBrushless);
+        leftPrimaryMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+
+        motorConfig.follow(leftPrimaryMotor);
+        leftSecondaryMotor = new SparkMax(LEFT_SECONDARY_MOTOR_ID, MotorType.kBrushless);
+        leftSecondaryMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+
+        motorConfig.disableFollowerMode();
+        motorConfig.inverted(RIGHT_DRIVE_MOTORS_INVERTED);
+        rightPrimaryMotor = new SparkMax(RIGHT_PRIMARY_MOTOR_ID, MotorType.kBrushless);
+        rightPrimaryMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+
+        motorConfig.follow(rightPrimaryMotor);
+        rightSecondaryMotor = new SparkMax(RIGHT_SECONDARY_MOTOR_ID, MotorType.kBrushless);
+        rightSecondaryMotor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
 
         poseEstimator = new DifferentialDrivePoseEstimator(
                 KINEMATICS, gyro.getRotation2d(), getWheelPositions().leftMeters, getWheelPositions().rightMeters,
                 new Pose2d());
 
         sysIdRoutine = new SysIdRoutine(
-                new SysIdRoutine.Config(Volts.of(1).per(Seconds.of(1)), Volts.of(8), null, null),
+                new SysIdRoutine.Config(Volts.of(1).per(Seconds), Volts.of(8), null, null),
                 new SysIdRoutine.Mechanism(
-                        (Measure<Voltage> volts) -> setVoltage(volts.magnitude()),
+                        (Voltage volts) -> setVoltage(volts.magnitude()),
                         log -> {
                             log.motor("primary")
                                     .voltage(sysidAppliedVoltageMeasure.mut_replace(
@@ -186,9 +187,9 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                         this));
 
         sysIdRotationRoutine = new SysIdRoutine(
-                new SysIdRoutine.Config(Volts.of(1).per(Seconds.of(1)), Volts.of(8), null, null),
+                new SysIdRoutine.Config(Volts.of(1).per(Seconds), Volts.of(8), null, null),
                 new SysIdRoutine.Mechanism(
-                        (Measure<Voltage> volts) -> {
+                        (Voltage volts) -> {
                             leftPrimaryMotor.setVoltage(volts.magnitude());
                             rightPrimaryMotor.setVoltage(-volts.magnitude());
                         },
@@ -324,24 +325,45 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Override
     public void setMotorHoldModes(MotorHoldMode motorHoldMode) {
         if (motorHoldMode == MotorHoldMode.COAST) {
-            leftPrimaryMotor.setIdleMode(IdleMode.kCoast);
-            leftSecondaryMotor.setIdleMode(IdleMode.kCoast);
-            rightPrimaryMotor.setIdleMode(IdleMode.kCoast);
-            rightSecondaryMotor.setIdleMode(IdleMode.kCoast);
+            SparkMaxConfig coastConfig = new SparkMaxConfig();
+            coastConfig.idleMode(IdleMode.kCoast);
+
+            leftPrimaryMotor.configure(coastConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            leftSecondaryMotor.configure(coastConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            rightPrimaryMotor.configure(coastConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            rightSecondaryMotor.configure(coastConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
         } else {
-            leftPrimaryMotor.setIdleMode(IdleMode.kBrake);
-            leftSecondaryMotor.setIdleMode(IdleMode.kBrake);
-            rightPrimaryMotor.setIdleMode(IdleMode.kBrake);
-            rightSecondaryMotor.setIdleMode(IdleMode.kBrake);
+            SparkMaxConfig brakeConfig = new SparkMaxConfig();
+            brakeConfig.idleMode(IdleMode.kBrake);
+
+            leftPrimaryMotor.configure(brakeConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            leftSecondaryMotor.configure(brakeConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            rightPrimaryMotor.configure(brakeConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
+            rightSecondaryMotor.configure(brakeConfig, ResetMode.kNoResetSafeParameters,
+                    PersistMode.kNoPersistParameters);
         }
     }
 
     @Override
     public void setCurrentLimit(int currentLimit) {
-        leftPrimaryMotor.setSmartCurrentLimit(currentLimit);
-        leftSecondaryMotor.setSmartCurrentLimit(currentLimit);
-        rightPrimaryMotor.setSmartCurrentLimit(currentLimit);
-        rightSecondaryMotor.setSmartCurrentLimit(currentLimit);
+        SparkMaxConfig currentConfig = new SparkMaxConfig();
+        currentConfig.smartCurrentLimit(currentLimit);
+
+        leftPrimaryMotor.configure(currentConfig, ResetMode.kNoResetSafeParameters,
+                PersistMode.kNoPersistParameters);
+        leftSecondaryMotor.configure(currentConfig, ResetMode.kNoResetSafeParameters,
+                PersistMode.kNoPersistParameters);
+        rightPrimaryMotor.configure(currentConfig, ResetMode.kNoResetSafeParameters,
+                PersistMode.kNoPersistParameters);
+        rightSecondaryMotor.configure(currentConfig, ResetMode.kNoResetSafeParameters,
+                PersistMode.kNoPersistParameters);
     }
 
     @Override
@@ -370,8 +392,6 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
     @Override
     public void driveClosedLoop(ChassisSpeeds speeds) {
         commandedWheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
-        // System.out.println(commandedWheelSpeeds);
-        // System.out.println(currentWheelSpeeds);
         commandedWheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
 
         feedbackVoltages = new DifferentialDriveWheelVoltages(
@@ -384,11 +404,30 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
                 commandedWheelSpeeds.leftMetersPerSecond,
                 lastWheelSpeeds.rightMetersPerSecond,
                 commandedWheelSpeeds.rightMetersPerSecond, LOOP_TIME);
-        // feedforwardVoltages = new DifferentialDriveWheelVoltages(
-        // simpleFeedforward.calculate(lastWheelSpeeds.leftMetersPerSecond,
-        // commandedWheelSpeeds.leftMetersPerSecond, LOOP_TIME),
-        // simpleFeedforward.calculate(lastWheelSpeeds.rightMetersPerSecond,
-        // commandedWheelSpeeds.rightMetersPerSecond, LOOP_TIME));
+
+        leftPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.left + feedforwardVoltages.left, -12, 12));
+        rightPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.right + feedforwardVoltages.right, -12, 12));
+        lastWheelSpeeds = commandedWheelSpeeds;
+    }
+
+    public void driveClosedLoop(ChassisSpeeds speeds, DriveFeedforwards feedforwards) {
+
+        commandedWheelSpeeds = KINEMATICS.toWheelSpeeds(speeds);
+        commandedWheelSpeeds.desaturate(MAX_DRIVING_VELOCITY_METERS_PER_SECOND);
+
+        feedbackVoltages = new DifferentialDriveWheelVoltages(
+                leftVelocityController.calculate(lastWheelSpeeds.leftMetersPerSecond,
+                        commandedWheelSpeeds.leftMetersPerSecond),
+                rightVelocityController.calculate(lastWheelSpeeds.rightMetersPerSecond,
+                        commandedWheelSpeeds.rightMetersPerSecond));
+
+        LinearAcceleration[] feedforwardAccelerations = feedforwards.accelerations();
+
+        DifferentialDriveWheelVoltages feedforwardVoltages = new DifferentialDriveWheelVoltages(
+                commandedWheelSpeeds.leftMetersPerSecond * feedforward.m_kVLinear
+                        + feedforwardAccelerations[0].magnitude() * feedforward.m_kALinear,
+                commandedWheelSpeeds.rightMetersPerSecond * feedforward.m_kVLinear
+                        + feedforwardAccelerations[1].magnitude() * feedforward.m_kALinear);
 
         leftPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.left + feedforwardVoltages.left, -12, 12));
         rightPrimaryMotor.setVoltage(MathUtil.clamp(feedbackVoltages.right + feedforwardVoltages.right, -12, 12));
@@ -460,23 +499,22 @@ public class Drivetrain extends SubsystemBase implements BaseDifferentialDrive {
 
     @Override
     public Command followPathCommand(PathPlannerPath path) {
-        return new FollowPathRamsete(
+        return new FollowPathCommand(
                 path,
-                this::getPose, // Robot pose supplier
-                this::getChassisSpeeds, // Current ChassisSpeeds supplier
-                this::driveClosedLoop, // Method that will drive the robot given ChassisSpeeds
-                RAMSETE_B,
-                RAMSETE_ZETA,
-                new ReplanningConfig(false, false), // Default path replanning config. See the API for the options here
+                this::getPose,
+                this::getChassisSpeeds,
+                this::driveClosedLoop,
+                new PPLTVController(0.02),
+                ROBOT_CONFIG, // The robot configuration
                 () -> {
                     var alliance = DriverStation.getAlliance();
                     if (alliance.isPresent()) {
                         return alliance.get() == DriverStation.Alliance.Red;
                     }
                     return false;
-                },
-                this // Reference to this subsystem to set requirements
-        ).andThen(this::stop, this).withName("drivetrain.followPath");
+                }, this)
+                .andThen(this::stop, this)
+                .withName("drivetrain.followPath");
     }
 
     @Override

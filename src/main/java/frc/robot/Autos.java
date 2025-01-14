@@ -1,6 +1,9 @@
 package frc.robot;
 
+import java.io.IOException;
 import java.util.List;
+
+import org.json.simple.parser.ParseException;
 
 import com.pathplanner.lib.path.PathPlannerPath;
 import com.techhounds.houndutil.houndauto.AutoRoutine;
@@ -14,7 +17,7 @@ import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Elevator;
 
 public class Autos {
-    public static AutoRoutine testPath(Drivetrain drivetrain) {
+    public static AutoRoutine testPath(Drivetrain drivetrain) throws IOException, ParseException {
         PathPlannerPath path = PathPlannerPath.fromPathFile("testPath");
         Command command = drivetrain.followPathCommand(path);
         return new AutoRoutine("testPath", command, List.of(path), path.getStartingDifferentialPose());
@@ -26,8 +29,9 @@ public class Autos {
                 coralSim.addScoringLocationCommand(scoreLocation));
     }
 
-    public static AutoRoutine GDC(Drivetrain drivetrain, Elevator elevator, Arm arm, CoralSim coralSim) {
-        PathPlannerPath Start_GPath = PathPlannerPath.fromPathFile("Start-G");
+    public static AutoRoutine GDC(Drivetrain drivetrain, Elevator elevator, Arm arm, CoralSim coralSim)
+            throws IOException, ParseException {
+        PathPlannerPath Start_GPath = PathPlannerPath.fromPathFile("Start-");
         PathPlannerPath G_PickupPath = PathPlannerPath.fromPathFile("G-Pickup");
         PathPlannerPath Pickup_DPath = PathPlannerPath.fromPathFile("Pickup-D");
         PathPlannerPath D_PickupPath = PathPlannerPath.fromPathFile("D-Pickup");

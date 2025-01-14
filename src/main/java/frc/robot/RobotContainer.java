@@ -4,12 +4,13 @@
 
 package frc.robot;
 
+import java.io.IOException;
 import java.util.function.Supplier;
 
+import org.json.simple.parser.ParseException;
 import org.littletonrobotics.urcl.URCL;
 
 import com.techhounds.houndutil.houndauto.AutoManager;
-import com.techhounds.houndutil.houndlib.SparkConfigurator;
 import com.techhounds.houndutil.houndlog.LoggingManager;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.SendableLog;
@@ -94,9 +95,12 @@ public class RobotContainer {
 
     public RobotContainer() {
         configureBindings();
-        configureAuto();
+        try {
+            configureAuto();
+        } catch (IOException | ParseException e) {
+            throw new RuntimeException(e);
+        }
         LoggingManager.getInstance().registerObject(this);
-        SparkConfigurator.safeBurnFlash();
         URCL.start();
 
         new Trigger(() -> {
@@ -116,7 +120,7 @@ public class RobotContainer {
         Controls.configureTestingControls(1, drivetrain, elevator, arm, intake, climber, leds);
     }
 
-    public void configureAuto() {
+    public void configureAuto() throws IOException, ParseException {
         AutoManager.getInstance().addRoutine(Autos.testPath(drivetrain));
         AutoManager.getInstance().addRoutine(Autos.GDC(drivetrain, elevator, arm, coralSim));
     }

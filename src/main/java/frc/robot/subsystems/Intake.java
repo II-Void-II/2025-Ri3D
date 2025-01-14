@@ -1,9 +1,11 @@
 package frc.robot.subsystems;
 
-import com.revrobotics.CANSparkBase.IdleMode;
-import com.revrobotics.CANSparkLowLevel.MotorType;
-import com.revrobotics.CANSparkFlex;
-import com.techhounds.houndutil.houndlib.SparkConfigurator;
+import com.revrobotics.spark.SparkFlex;
+import com.revrobotics.spark.SparkBase.PersistMode;
+import com.revrobotics.spark.SparkBase.ResetMode;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+import com.revrobotics.spark.config.SparkMaxConfig;
 import com.techhounds.houndutil.houndlib.subsystems.BaseIntake;
 import com.techhounds.houndutil.houndlog.annotations.Log;
 import com.techhounds.houndutil.houndlog.annotations.LoggedObject;
@@ -16,13 +18,19 @@ import static frc.robot.Constants.Intake.*;
 @LoggedObject
 public class Intake extends SubsystemBase implements BaseIntake {
     @Log
-    private final CANSparkFlex motor;
+    private final SparkFlex motor;
+
+    private SparkMaxConfig motorConfig;
 
     public Intake() {
-        motor = SparkConfigurator.createSparkFlex(MOTOR_ID, MotorType.kBrushless,
-                MOTOR_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kCoast),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT));
+        motorConfig = new SparkMaxConfig();
+        motorConfig
+                .inverted(MOTOR_INVERTED)
+                .idleMode(IdleMode.kBrake)
+                .smartCurrentLimit(CURRENT_LIMIT);
+
+        motor = new SparkFlex(MOTOR_ID, MotorType.kBrushless);
+        motor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
     }
 
     public void setRollerVoltage(double voltage) {

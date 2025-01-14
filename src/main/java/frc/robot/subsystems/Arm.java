@@ -2,10 +2,12 @@ package frc.robot.subsystems;
 
 import java.util.function.Supplier;
 
-import com.revrobotics.CANSparkBase.IdleMode;
-import com.revrobotics.CANSparkLowLevel.MotorType;
-import com.revrobotics.CANSparkMax;
-import com.techhounds.houndutil.houndlib.SparkConfigurator;
+import com.revrobotics.spark.SparkBase.PersistMode;
+import com.revrobotics.spark.SparkBase.ResetMode;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
+import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.config.SparkMaxConfig;
+import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.techhounds.houndutil.houndlib.Utils;
 import com.techhounds.houndutil.houndlib.subsystems.BaseSingleJointedArm;
 import com.techhounds.houndutil.houndlog.annotations.Log;
@@ -18,11 +20,10 @@ import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.units.Angle;
-import edu.wpi.first.units.Measure;
-import edu.wpi.first.units.MutableMeasure;
-import edu.wpi.first.units.Velocity;
-import edu.wpi.first.units.Voltage;
+import edu.wpi.first.units.measure.MutAngle;
+import edu.wpi.first.units.measure.MutAngularVelocity;
+import edu.wpi.first.units.measure.MutVoltage;
+import edu.wpi.first.units.measure.Voltage;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
@@ -38,14 +39,16 @@ import frc.robot.GlobalStates;
 
 import static edu.wpi.first.units.Units.Radians;
 import static edu.wpi.first.units.Units.RadiansPerSecond;
-import static edu.wpi.first.units.Units.Seconds;
+import static edu.wpi.first.units.Units.Second;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.Constants.Arm.*;
 
 @LoggedObject
 public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPosition> {
     @Log
-    private final CANSparkMax motor;
+    private final SparkMax motor;
+
+    private SparkMaxConfig motorConfig;
 
     @Log(groups = "control")
     private final ProfiledPIDController pidController = new ProfiledPIDController(kP, kI, kD, MOVEMENT_CONSTRAINTS);
@@ -76,10 +79,9 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
 
     private double simVelocity = 0.0;
 
-    private final MutableMeasure<Voltage> sysidAppliedVoltageMeasure = MutableMeasure.mutable(Volts.of(0));
-    private final MutableMeasure<Angle> sysidPositionMeasure = MutableMeasure.mutable(Radians.of(0));
-    private final MutableMeasure<Velocity<Angle>> sysidVelocityMeasure = MutableMeasure
-            .mutable(RadiansPerSecond.of(0));
+    private final MutVoltage sysidAppliedVoltageMeasure = Volts.mutable(0);
+    private final MutAngle sysidPositionMeasure = Radians.mutable(0);
+    private final MutAngularVelocity sysidVelocityMeasure = RadiansPerSecond.mutable(0);
 
     private final SysIdRoutine sysIdRoutine;
 
@@ -91,16 +93,23 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
     private boolean initialized;
 
     public Arm(PositionTracker positionTracker, MechanismLigament2d ligament, Supplier<Pose3d> carriagePoseSupplier) {
-        motor = SparkConfigurator.createSparkMax(MOTOR_ID, MotorType.kBrushless, MOTOR_INVERTED,
-                (s) -> s.setIdleMode(IdleMode.kBrake),
-                (s) -> s.setSmartCurrentLimit(CURRENT_LIMIT),
-                (s) -> s.getEncoder().setPositionConversionFactor(ENCODER_ROTATIONS_TO_METERS),
-                (s) -> s.getEncoder().setVelocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0));
+
+        motorConfig = new SparkMaxConfig();
+        motorConfig
+                .inverted(MOTOR_INVERTED)
+                .idleMode(IdleMode.kBrake)
+                .smartCurrentLimit(CURRENT_LIMIT);
+        motorConfig.encoder
+                .positionConversionFactor(ENCODER_ROTATIONS_TO_METERS)
+                .velocityConversionFactor(ENCODER_ROTATIONS_TO_METERS / 60.0);
+
+        motor = new SparkMax(MOTOR_ID, MotorType.kBrushless);
+        motor.configure(motorConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
 
         sysIdRoutine = new SysIdRoutine(
-                new SysIdRoutine.Config(Volts.of(1).per(Seconds.of(1)), Volts.of(3), null, null),
+                new SysIdRoutine.Config(Volts.of(1).per(Second), Volts.of(3), null, null),
                 new SysIdRoutine.Mechanism(
-                        (Measure<Voltage> volts) -> setVoltage(volts.magnitude()),
+                        (Voltage volts) -> setVoltage(volts.magnitude()),
                         log -> {
                             log.motor("primary")
                                     .voltage(sysidAppliedVoltageMeasure.mut_replace(motor.getAppliedOutput(), Volts))
@@ -240,9 +249,13 @@ public class Arm extends SubsystemBase implements BaseSingleJointedArm<ArmPositi
     @Override
     public Command coastMotorsCommand() {
         return runOnce(motor::stopMotor)
-                .andThen(() -> motor.setIdleMode(IdleMode.kCoast))
+                .andThen(() -> {
+                    motorConfig.idleMode(IdleMode.kCoast);
+                    motor.configure(motorConfig, ResetMode.kNoResetSafeParameters, PersistMode.kNoPersistParameters);
+                })
                 .finallyDo((d) -> {
-                    motor.setIdleMode(IdleMode.kBrake);
+                    motorConfig.idleMode(IdleMode.kBrake);
+                    motor.configure(motorConfig, ResetMode.kNoResetSafeParameters, PersistMode.kNoPersistParameters);
                     pidController.reset(getPosition());
                 }).withInterruptBehavior(InterruptionBehavior.kCancelIncoming)
                 .withName("arm.coastMotorsCommand");

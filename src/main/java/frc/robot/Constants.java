@@ -2,6 +2,8 @@ package frc.robot;
 
 import java.util.List;
 
+import com.pathplanner.lib.config.ModuleConfig;
+import com.pathplanner.lib.config.RobotConfig;
 import com.techhounds.houndutil.houndlib.leds.BaseLEDSection;
 
 import edu.wpi.first.math.kinematics.DifferentialDriveKinematics;
@@ -33,10 +35,11 @@ public class Constants {
         public static final double WHEEL_CIRCUMFERENCE = 2 * Math.PI * WHEEL_RADIUS_METERS;
         public static final double ENCODER_ROTATIONS_TO_METERS = WHEEL_CIRCUMFERENCE / GEARING;
 
-        public static final int CURRENT_LIMIT = 60; // TODO
+        public static final int CURRENT_LIMIT = 60;
         public static final DCMotor GEARBOX_REPR = DCMotor.getNEO(2);
         public static final double MOI = 2;
-        public static final double MASS_KG = 20; // TODO
+        public static final double MASS_KG = 32;
+        public static final double WHEEL_COF = 1.0;
 
         public static final double VELOCITY_kP = RobotBase.isReal() ? 1.5 : 1.4078;
         public static final double VELOCITY_kI = 0.0;
@@ -54,16 +57,13 @@ public class Constants {
         public static final double ROTATION_kI = 0.0;
         public static final double ROTATION_kD = 0.0;
 
-        public static final double RAMSETE_B = 3; // TODO
-        public static final double RAMSETE_ZETA = 0.7; // TODO
+        public static final double RAMSETE_B = 3;
+        public static final double RAMSETE_ZETA = 0.7;
 
         public static final double MAX_DRIVING_VELOCITY_METERS_PER_SECOND = 5;
-        public static final double MAX_DRIVING_ACCELERATION_METERS_PER_SECOND_SQUARED = 8; // TODO
+        public static final double MAX_DRIVING_ACCELERATION_METERS_PER_SECOND_SQUARED = 8;
         public static final double MAX_ANGULAR_VELOCITY_RADIANS_PER_SECOND = 20;
         public static final double MAX_ANGULAR_ACCELERATION_RADIANS_PER_SECOND_SQUARED = 40;
-
-        public static final double PATH_FOLLOWING_TRANSLATION_kP = 8.0; // TODO
-        public static final double PATH_FOLLOWING_ROTATION_kP = 8.0; // TODO
 
         public static final TrapezoidProfile.Constraints MOVEMENT_CONSTRAINTS = new TrapezoidProfile.Constraints(
                 MAX_DRIVING_VELOCITY_METERS_PER_SECOND,
@@ -73,6 +73,14 @@ public class Constants {
                 MAX_ANGULAR_ACCELERATION_RADIANS_PER_SECOND_SQUARED);
 
         public static final DifferentialDriveKinematics KINEMATICS = new DifferentialDriveKinematics(
+                TRACK_WIDTH_METERS);
+
+        public static final RobotConfig ROBOT_CONFIG = new RobotConfig(
+                MASS_KG, MOI,
+                new ModuleConfig(
+                        WHEEL_RADIUS_METERS,
+                        MAX_DRIVING_VELOCITY_METERS_PER_SECOND,
+                        WHEEL_COF, GEARBOX_REPR, CURRENT_LIMIT, 2),
                 TRACK_WIDTH_METERS);
     }
 
