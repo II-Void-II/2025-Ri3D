@@ -43,11 +43,10 @@ public class Controls {
         controller.rightBumper().whileTrue(intake.runRollersCommand());
         controller.leftBumper().whileTrue(intake.reverseRollersCommand());
 
-        climber.setDefaultCommand(Commands
-                .run(() -> climber.setVoltage(MathUtil
-                        .applyDeadband((controller.getRightTriggerAxis() - controller.getLeftTriggerAxis()) * 4,
-                                0.1)),
-                        climber));
+        climber.setDefaultCommand(Commands.run(
+            () -> climber.setVoltage(
+                MathUtil.applyDeadband((controller.getRightTriggerAxis() - controller.getLeftTriggerAxis()) * 4, 0.1)), 
+                    climber));
 
         controller.povRight().onTrue(GlobalStates.INITIALIZED.enableCommand());
 
