@@ -34,6 +34,7 @@ import frc.robot.subsystems.Drivetrain;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.Intake;
 import frc.robot.subsystems.LEDs;
+import frc.robot.subsystems.drive.Drive;
 
 public class RobotContainer {
     @SendableLog
@@ -60,7 +61,11 @@ public class RobotContainer {
     PositionTracker positionTracker = new PositionTracker();
 
     @Log
-    Drivetrain drivetrain = new Drivetrain();
+    Drive drivetrain = new Drive(new GyroIOPigeon2(),
+    new ModuleIOTalonFX(TunerConstants.FrontLeft),
+    new ModuleIOTalonFX(TunerConstants.FrontRight),
+    new ModuleIOTalonFX(TunerConstants.BackLeft),
+    new ModuleIOTalonFX(TunerConstants.BackRight));
     @Log
     Elevator elevator = new Elevator(positionTracker, elevatorLigament);
     @Log
